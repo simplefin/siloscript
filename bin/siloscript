@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+# Copyright (c) The SimpleFIN Team
+# See LICENSE for details.
+
+from siloscript.cli import run
+run()

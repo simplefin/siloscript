@@ -31,5 +31,8 @@ setup(
     install_requires=[
         'klein',
     ],
+    scripts=[
+        'bin/siloscript',
+    ],
 )
 

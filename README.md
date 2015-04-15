@@ -19,7 +19,7 @@ This was written as a way of giving bank website-scraping scripts a place to sto
 There's a sample web interface you can run.  Install dependencies then run the server:
 
     pip install -r requirements.txt
-    PYTHONPATH=. python siloscript/server.py
+    PYTHONPATH=. bin/siloscript serve
 
 Then open your browser to http://127.0.0.1:9600/static/debug.html
 
@@ -31,7 +31,7 @@ If you click "Run" again, it will not ask you for the information again, because
 
 ## Writing a user-interaction script ##
 
-The only special your script needs to do is expect a `DATASTORE_URL` environment variable, like this:
+The only special thing your script needs to do is expect a `DATASTORE_URL` environment variable, like this:
 
     DATASTORE_URL="http://foo.com" ./your-script
 
