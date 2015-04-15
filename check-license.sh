@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) The SimpleFIN Team
+# See LICENSE for details.
 
 set -e
 MISSING=$(grep -Lr \
@@ -8,6 +10,8 @@ MISSING=$(grep -Lr \
     --exclude='*.egg-info/*' \
     --exclude='_trial_temp/*' \
     --exclude='requirements.txt' \
+    --exclude=LICENSE \
+    --exclude='*.sublime-*' \
     "Copyright (c) The SimpleFIN Team" \
     *)
 
