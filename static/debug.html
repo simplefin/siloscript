@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html ng-app="simplefin-debug" ng-controller="DebugController as main">
+  <head>
+    <title>Bank stuff</title>
+  </head>
+  <body>
+
+  <div>
+    <fieldset>
+      <legend>Run a script</legend>
+      
+      <div class="field">
+        <label>User</label>
+        <input ng-model="main.user" value="jim">  
+      </div>      
+
+      <div class="field">
+        <label>Script</label>
+        <input ng-model="main.script" placeholder="testbank/foo">  
+      </div>
+      
+      <div class="field">
+        <label>Additional args</label>
+        <input ng-model="main.args" placeholder='["foo", "bar"]'>
+      </div>
+      
+      <div class="field">
+        <button ng-click="main.runScript(main.user, main.script, main.args)">Run</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Questions</legend>
+      <div ng-repeat="question in main.questions">
+        {{ question.prompt }} <input type="text" ng-model="answer"> <button ng-click="main.submitAnswer(question, answer)">Answer</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Result</legend>
+      <div></div>
+    </fieldset>
+  </div>
+  <script src="eventsource.min.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular.min.js"></script>
+  <script>
+
+  angular.module('simplefin-debug', [])
+  .factory('SSE', function($rootScope) {
+    var SSE = this;
+    SSE.start = function(url, callback_map) {
+      var events = new EventSource(url);
+      console.log('listening on', url);
+      console.log(callback_map);
+      angular.forEach(callback_map, function(func, event) {
+        events.addEventListener(event, function(data) {
+          console.log('data', data);
+          $rootScope.$apply(function() {
+            func(data);
+          });
+        });
+      });
+      return events;
+    };
+    return SSE;
+  })
+  .factory('encodeFormData', function() {
+    return function(dict) {
+      var parts = [];
+      angular.forEach(dict, function(v, k) {
+        parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+      })
+      return parts.join('&');
+    }
+  })
+  .controller('DebugController', function($http, SSE, encodeFormData) {
+    var main = this;
+    main.user = 'jim';
+    main.args = '[]';
+    main.script = 'testbank/foo';
+    main.output = '';
+    main.questions = [];
+
+    main.runScript = function(user, script, args) {
+      console.log('runScript', user, script, args);
+      // open a channel
+      return $http.get('/channel/open')
+      .then(function(response) {
+        var channel_key = response.data;
+        // start listening for events
+        SSE.start('/channel/' + channel_key + '/events', {
+          'question': function(response) {
+            console.log('got question', response);
+            main.questions.push(angular.fromJson(response.data));
+          }
+        });
+
+        // spawn the process
+        return $http({
+            method: 'POST',
+            url: '/run/' + user,
+            data: encodeFormData({
+              'script': script,
+              'args': args,
+              'channel_key': channel_key,
+            }),
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+        })
+        .then(function(response) {
+          console.log('response of run', response);
+        })
+      })
+      
+    }
+    return main;
+  })  
+  </script>
+  </body>
+</html>
