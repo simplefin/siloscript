@@ -45,7 +45,7 @@ You'll need 4 terminals.
 
 In terminal 1, start the server:
 
-    python sfinb/server.py
+    python siloscript/server.py
 
 In terminal 2, open a user-interaction channel:
 

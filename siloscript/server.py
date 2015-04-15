@@ -10,27 +10,12 @@ from twisted.web.static import File
 import sys
 
 import json
+from functools import partial
 from uuid import uuid4
 
+from siloscript.storage import MemoryStore, Silo
 
 
-class InMemoryStore(object):
-
-
-    def __init__(self):
-        self._data = {}
-
-
-    def get(self, user_id, sub_key, key):
-        try:
-            return defer.succeed(self._data[(user_id, sub_key, key)])
-        except:
-            return defer.fail(KeyError())
-
-
-    def put(self, user_id, sub_key, key, value):
-        self._data[(user_id, sub_key, key)] = value
-        return defer.succeed(None)
 
 
 def sseMsg(name, data):
@@ -49,8 +34,8 @@ class UIServer(object):
         self.store = store
         self.script_root = FilePath(script_root)
         self.static_root = static_root
-        self.data_access_keys = {}
-        self.data_access_to_channel = {}
+
+        self.silos = {}
         self.channel_request = {}
         self.pending_questions = {}
 
@@ -142,9 +127,7 @@ class UIServer(object):
         if not script:
             log.msg('No script', request.content.read())
             request.setResponseCode(400)
-            return
-
-        
+            return        
 
         script_fp = self.script_root
         try:
@@ -153,12 +136,8 @@ class UIServer(object):
         except:
             request.setResponseCode(400)
             return
-        
-        
-        channel = self.channel_request.get(channel_key, None)
 
-        access_key = self.mkDataAccessKey(user, script,
-            channel_key=channel_key)
+        access_key = self.mkSilo(user, script, channel_key)
 
         env = {
             'DATASTORE_URL': '%s/data/%s' % (self.my_root, access_key),
@@ -166,70 +145,47 @@ class UIServer(object):
         out, err, exit = yield utils.getProcessOutputAndValue(script_fp.path,
             args, env=env)
 
-        defer.returnValue(out)
+        channel = self.channel_request.get(channel_key, None)
         if channel:
             channel['d'].callback(None)
+        defer.returnValue(out)
 
 
-    def mkDataAccessKey(self, user_id, sub_key, channel_key=None):
+    def mkSilo(self, user_id, sub_key, channel_key=None):
         """
-        Open up access to a particular user+sub_key set of keys and values.
+        Make a silo tied to a particular user and sub_key.
         """
+        func = None
+        if channel_key:
+            func = partial(self._askQuestion, channel_key)
+        silo = Silo(self.store, user_id, sub_key, func)
         key = str(uuid4())
-        self.data_access_keys[key] = {
-            'user_id': user_id,
-            'sub_key': sub_key,
-            'channel_key': channel_key,
-        }
+        self.silos[key] = silo
         return key
 
+
+    #----------------------------------------------------------------------
+    # the interface scripts use
+    #----------------------------------------------------------------------
 
     @app.route('/data/<string:access_key>/<string:key>', methods=['GET'])
     @defer.inlineCallbacks
     def data_GET(self, request, access_key, key):
-        access_data = self.data_access_keys[access_key]
+        silo = self.silos[access_key]
         prompt = request.args.get('prompt', [None])[0]
 
-        #----------------------------------------------------------------------
-        # try db first
-        #----------------------------------------------------------------------
         try:
-            log.msg('checking store: %r' % (key,))
-            value = yield self.store.get(
-                access_data['user_id'],
-                access_data['sub_key'],
-                key,
-            )
+            log.msg('checking silo: %r' % (key,))
+            value = yield silo.get(key, prompt=prompt)
             defer.returnValue(value)
         except KeyError:
-            log.msg('not in store')
-
-        #----------------------------------------------------------------------
-        # try user, maybe
-        #----------------------------------------------------------------------
-        if prompt and access_data['channel_key']:
-            log.msg('checking user: %r %r' % (key, prompt))
-            try:
-                value = yield self._askQuestion(
-                    access_data['channel_key'], prompt)
-                
-                # save it for later
-                yield self.store.put(
-                    access_data['user_id'],
-                    access_data['sub_key'],
-                    key,
-                    value)
-
-                defer.returnValue(value)
-            except Exception as e:
-                log.msg('error from user: %r' % (e,))
-
-        request.setResponseCode(404)
+            log.msg('not present')
+            request.setResponseCode(404)
 
 
 
 if __name__ == '__main__':
     log.startLogging(sys.stdout)
-    store = InMemoryStore()
+    store = MemoryStore()
     server = UIServer(store, 'scripts', static_root='static')
     server.app.run('0.0.0.0', 9600)
