@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) The SimpleFIN Team
+# See LICENSE for details.
 
 set -e
 
