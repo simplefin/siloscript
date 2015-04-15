@@ -1,0 +1,5 @@
+#!/bin/bash
+
+account_id=$(curl ${DATASTORE_URL}/account_id?prompt=Account)
+echo $account_id
+
