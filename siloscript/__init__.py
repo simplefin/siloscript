@@ -3,4 +3,4 @@
 
 __all__ = ['__version__']
 
-from sfinb.version import __version__
+from siloscript.version import __version__
