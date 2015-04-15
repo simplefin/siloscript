@@ -7,16 +7,35 @@ See LICENSE for details.
 
 # siloscript #
 
-siloscript provides a way to run scripts that might require a user to provide answers to questions.
+siloscript provides a way to run scripts that might require sensitive user input (such as account credentials).
+
+This was written as a way of giving bank website-scraping scripts a place to store/get data.  But it is general enough to maybe be useful elsewhere.
+
+
+
+
+## Example ##
+
+There's a sample web interface you can run.  Install dependencies then run the server:
+
+    pip install -r requirements.txt
+    PYTHONPATH=. python siloscript/server.py
+
+Then open your browser to http://127.0.0.1:9600/static/debug.html
+
+Click the "Run" button and it will run the `scripts/testscript/foo` script in this repo, which asks for an account number.  Enter something.  It will echo it back as a result.
+
+If you click "Run" again, it will not ask you for the information again, because it is cached.
+
 
 
 ## Writing a user-interaction script ##
 
-Your script will be called with a `DATASTORE_URL` environment variable, like this:
+The only special your script needs to do is expect a `DATASTORE_URL` environment variable, like this:
 
     DATASTORE_URL="http://foo.com" ./your-script
 
-The script produces a response on stdout.  If the script exits with exit code 0, it has succeeded, otherwise it is considered a failure by the caller.
+The script produces the desired response on stdout.  If the script exits with exit code 0, it has succeeded, otherwise it is considered a failure by the caller.
 
 The `DATASTORE_URL` provides a key-value storage interface tied to a single user.  If your script needs user information (such as credentials) it can ask through that URL.  If your script needs to store state between invocations it can store it with that URL.
 
@@ -33,45 +52,6 @@ If you want to save the value of some cookies that were set as a result of inter
 To get previously stored data but **never** ask the user, omit the `prompt=XXX` query parameter:
 
     curl ${DATASTORE_URL}/cookies
-
-
-## Where does `DATASTORE_URL` come from? ##
-
-
-
-## Example ##
-
-You'll need 4 terminals.
-
-In terminal 1, start the server:
-
-    python siloscript/server.py
-
-In terminal 2, open a user-interaction channel:
-
-    curl http://127.0.0.1:9600/channel/$(curl http://127.0.0.1:9600/channel/open)/events
-
-In terminal 3, request the `testscript/foo` script to be run for the user `jimmy`.  Get the `channel_key` from the output of terminal 2:
-
-    curl http://127.0.0.1:9600/run/jimmy -X POST -d "script=testscript/foo" -d"channel_key=${CHANNEL_KEY_FROM_TERMINAL_2}"
-
-You will see a question event come up on terminal 2.  Use that question id and answer the question in terminal 4:
-
-    curl http://127.0.0.1:9600/question/${QUESTION_ID_FROM_TERMINAL_2} -X POST -d"18293093"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

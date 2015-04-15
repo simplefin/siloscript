@@ -4,6 +4,5 @@
 
 set -e
 
-account_id=$(curl ${DATASTORE_URL}/account_id?prompt=Account)
-echo $account_id
-
+account_number=$(curl ${DATASTORE_URL}/account_number?prompt=Account%20Number%3F)
+echo "Your account number is $account_number"
