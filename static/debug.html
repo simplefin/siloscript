@@ -5,44 +5,56 @@
 <!DOCTYPE html>
 <html ng-app="simplefin-debug" ng-controller="DebugController as main">
   <head>
-    <title>Bank stuff</title>
+    <title>Siloscript web UI</title>
+    <style>
+    .ng-cloak {
+      display: none;
+    }
+    </style>
   </head>
-  <body>
+  <body class="ng-cloak">
 
   <div>
     <fieldset>
       <legend>Run a script</legend>
       
-      <div class="field">
-        <label>User</label>
-        <input ng-model="main.user" value="jim">  
-      </div>      
+      <form ng-submit="main.runScript(main.user, main.script, main.args)">
+        <div class="field">
+          <label>User</label>
+          <input ng-model="main.user" value="jim">  
+        </div>      
 
-      <div class="field">
-        <label>Script</label>
-        <input ng-model="main.script" placeholder="testbank/foo">  
-      </div>
-      
-      <div class="field">
-        <label>Additional args</label>
-        <input ng-model="main.args" placeholder='["foo", "bar"]'>
-      </div>
-      
-      <div class="field">
-        <button ng-click="main.runScript(main.user, main.script, main.args)">Run</button>
-      </div>
+        <div class="field">
+          <label>Script</label>
+          <input ng-model="main.script" placeholder="testscript/foo">  
+        </div>
+        
+        <div class="field">
+          <label>Additional args</label>
+          <input ng-model="main.args" placeholder='["foo", "bar"]'>
+        </div>
+        
+        <div class="field">
+          <button type="submit">Run</button>
+        </div>
+      </form>
     </fieldset>
 
-    <fieldset>
+    <fieldset ng-if="main.questions.length">
       <legend>Questions</legend>
       <div ng-repeat="question in main.questions">
-        {{ question.prompt }} <input type="text" ng-model="answer"> <button ng-click="main.submitAnswer(question, answer)">Answer</button>
+        <form ng-submit="main.submitAnswer(question, answer)">
+          {{ question.prompt }} <input type="text" ng-model="answer"> <button type="submit">Answer</button>
+        </form>
       </div>
     </fieldset>
 
-    <fieldset>
+    <div ng-if="main.running" style="color: #aaa;">script is running...</div>
+
+    <fieldset ng-if="main.output">
       <legend>Result</legend>
-      <div></div>
+      
+      <pre>{{ main.output }}</pre>
     </fieldset>
   </div>
   <script src="eventsource.min.js"></script>
@@ -58,7 +70,7 @@
       console.log(callback_map);
       angular.forEach(callback_map, function(func, event) {
         events.addEventListener(event, function(data) {
-          console.log('data', data);
+          console.log('event data', data);
           $rootScope.$apply(function() {
             func(data);
           });
@@ -81,18 +93,21 @@
     var main = this;
     main.user = 'jim';
     main.args = '[]';
-    main.script = 'testbank/foo';
+    main.script = 'testscript/foo';
     main.output = '';
+    main.running = false;
     main.questions = [];
 
     main.runScript = function(user, script, args) {
+      main.output = '';
+      main.running = true;
       console.log('runScript', user, script, args);
       // open a channel
       return $http.get('/channel/open')
       .then(function(response) {
         var channel_key = response.data;
         // start listening for events
-        SSE.start('/channel/' + channel_key + '/events', {
+        var ev = SSE.start('/channel/' + channel_key + '/events', {
           'question': function(response) {
             console.log('got question', response);
             main.questions.push(angular.fromJson(response.data));
@@ -112,9 +127,24 @@
         })
         .then(function(response) {
           console.log('response of run', response);
+          ev.close();
+          main.output = response.data;
+          main.running = false;
         })
+      });
+    }
+    main.submitAnswer = function(question, answer) {
+      console.log('submitting answer', question, answer);
+      return $http({
+          method: 'POST',
+          url: '/question/' + question.id,
+          data: answer,
+          headers: {'Content-Type': 'text/plain'},
       })
-      
+      .then(function(response) {
+        console.log('answer submitted');
+        main.questions.splice(main.questions.indexOf(question), 1);
+      })
     }
     return main;
   })  

@@ -183,6 +183,13 @@ class UIServer(object):
             request.setResponseCode(404)
 
 
+    @app.route('/data/<string:access_key>/<string:key>', methods=['PUT'])
+    def data_PUT(self, request, access_key, key):
+        silo = self.silos[access_key]
+        value = request.content.read()
+        return silo.put(key, value)
+
+
 
 if __name__ == '__main__':
     log.startLogging(sys.stdout)
