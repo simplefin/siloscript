@@ -13,13 +13,18 @@ This was written as a way of giving bank website-scraping scripts a place to sto
 
 
 
+## Installation ##
+
+Install the latest stable version from GitHub:
+
+    pip install git+git://github.com/simplefin/siloscript.git@master
+
 
 ## Example ##
 
 There's a sample web interface you can run.  Install dependencies then run the server:
 
-    pip install -r requirements.txt
-    PYTHONPATH=. bin/siloscript serve
+    siloscript serve
 
 Then open your browser to http://127.0.0.1:9600/static/debug.html
 

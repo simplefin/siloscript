@@ -1,8 +1,10 @@
 # Copyright (c) The SimpleFIN Team
 # See LICENSE for details.
 
+from twisted.python.filepath import FilePath
 import argparse
 
+root = FilePath(__file__).parent()
 
 
 
@@ -28,10 +30,10 @@ server_parser.add_argument('--port', '-p',
     default=9600,
     help='Port to serve HTTP server on. (default: %(default)s)')
 server_parser.add_argument('--scripts', '-s',
-    default='scripts',
+    default=root.child('data').child('scripts').path,
     help='Path to executable scripts.  (default: %(default)s)')
 server_parser.add_argument('--static-root', '-S',
-    default='static',
+    default=root.child('data').child('static'),
     help='Path to static files served at /static.  (default: %(default)s)')
 server_parser.set_defaults(func=serve)
 

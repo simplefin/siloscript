@@ -1,7 +1,7 @@
 # Copyright (c) The SimpleFIN Team
 # See LICENSE for details.
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 import re
 import os
@@ -25,11 +25,10 @@ setup(
     author_email='matt@simplefin.org',
     name='siloscript',
     version=getVersion(),
-    packages=[
-        'siloscript', 'siloscript.test',
-    ],
+    include_package_data=True,
+    packages=find_packages(),
     install_requires=[
-        'klein',
+        'klein>=15.0.0',
     ],
     scripts=[
         'bin/siloscript',
