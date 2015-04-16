@@ -7,6 +7,9 @@ from twisted.python import log
 from twisted.python.filepath import FilePath
 from twisted.internet import utils
 from twisted.web.static import File
+
+import hashlib
+import os
 import sys
 
 import json
@@ -137,13 +140,29 @@ class UIServer(object):
             request.setResponseCode(400)
             return
 
+        if not script_fp.exists():
+            request.setResponseCode(404)
+            return
+
         access_key = self.mkSilo(user, script, channel_key)
 
-        env = {
+        env = os.environ.copy()
+        env.update({
             'DATASTORE_URL': '%s/data/%s' % (self.my_root, access_key),
-        }
-        out, err, exit = yield utils.getProcessOutputAndValue(script_fp.path,
-            args, env=env)
+        })
+        path = script_fp.parent().path
+
+        log.msg('Running in path: %r' % (path,))
+        try:
+            out, err, exit = yield utils.getProcessOutputAndValue(script_fp.path,
+                args, env=env, path=path)
+        except Exception as e:
+            log.msg("Error running script")
+            log.err(e)
+            raise
+
+        log.msg('err: %r' % (err,))
+        log.msg('rc : %r' % (exit,))
 
         channel = self.channel_request.get(channel_key, None)
         if channel:
@@ -171,6 +190,10 @@ class UIServer(object):
     @app.route('/data/<string:access_key>/<string:key>', methods=['GET'])
     @defer.inlineCallbacks
     def data_GET(self, request, access_key, key):
+        if key.startswith(':'):
+            request.setResponseCode(400)
+            request.write('key may not start with :\n')
+            return
         silo = self.silos[access_key]
         prompt = request.args.get('prompt', [None])[0]
 
@@ -185,9 +208,29 @@ class UIServer(object):
 
     @app.route('/data/<string:access_key>/<string:key>', methods=['PUT'])
     def data_PUT(self, request, access_key, key):
+        if key.startswith(':'):
+            request.setResponseCode(400)
+            request.write('key may not start with :\n')
+            return
         silo = self.silos[access_key]
         value = request.content.read()
         return silo.put(key, value)
+
+
+    @app.route('/data/<string:access_key>', methods=['POST'])
+    @defer.inlineCallbacks
+    def data_getID(self, request, access_key):
+        value = request.args.get('value', [''])[0]
+        silo = self.silos[access_key]
+        h = hashlib.sha1(value).hexdigest()
+        key = ':private:%s' % (h,)
+        try:
+            opaque = yield silo.get(key)
+        except KeyError:
+            log.msg('Creating opaque key')
+            opaque = str(uuid4())
+            yield silo.put(key, opaque)
+        defer.returnValue(opaque)
 
 
 
