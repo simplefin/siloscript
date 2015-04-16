@@ -20,7 +20,7 @@ def serve(args):
 
     log.startLogging(sys.stdout)
     store = MemoryStore()
-    server = UIServer(store, args.scripts, static_root=args.static)
+    server = UIServer(store, args.scripts, static_root=args.static_root)
     server.app.run('0.0.0.0', args.port)
 
 
