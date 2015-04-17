@@ -3,8 +3,8 @@
 
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer
-from twisted.python.filepath import FilePath
 
+from mock import MagicMock
 
 from siloscript.storage import MemoryStore
 from siloscript.server import TokenInternals
@@ -21,7 +21,7 @@ class TokenInternalsTest(TestCase):
         store = MemoryStore()
         machine = TokenInternals(
             store=store,
-            script_root='not real')
+            runner='not real')
 
         # create a channel
         channel_key = yield machine.channel_open()
@@ -77,32 +77,50 @@ class TokenInternalsTest(TestCase):
             "The channel should have been closed")
 
 
-    @defer.inlineCallbacks
-    def test_run_basic_noChannel(self):
-        """
-        A basic run looks like this.
-        """
-        script_root = FilePath(self.mktemp())
-        script_root.makedirs()
-        foo_script = script_root.child('foo.sh')
-        foo_script.setContent('#!/bin/bash\necho hey from foo')
-        store = MemoryStore()
-        machine = TokenInternals(
-            store=store,
-            script_root=script_root.path)
-        out, err, rc = yield machine.run_runScript('jim', 'foo.sh', args=[])
-        self.assertEqual(out, 'hey from foo\n')
-        self.assertEqual(err, '')
-        self.assertEqual(rc, 0)
-
-
     def test_run_useScriptRunner(self):
         """
         running a script should be sent to some other script runner rather
         than spawning processes directly with the machine.  It should include
         everything the runner needs to create the DATASTORE_URL.
         """
-        self.fail('write me')
+        # XXX replace this with a better fake
+        runner = MagicMock()
+
+        result = defer.Deferred()
+        runner.runScript.return_value = result
+
+        store = MemoryStore()
+        machine = TokenInternals(
+            store=store,
+            runner=runner)
+
+        ch = machine.channel_open()
+
+        # start execution
+        out_d = machine.run('jim', 'foo.sh', args=['hey'],
+            channel_key=ch)
+        self.assertEqual(out_d.called, False, "Should not have finished yet")
+
+        # while it's still running
+        self.assertEqual(runner.runScript.call_count, 1,
+            "Should have called runScript")
+        args, kwargs = runner.runScript.call_args
+        self.assertIn('silo_key', kwargs,
+            "Should have given the runner a silo_key")
+        self.assertEqual(kwargs['script'], 'foo.sh')
+        self.assertEqual(kwargs['args'], ['hey'])
+        self.assertIn(kwargs['silo_key'], machine.silos,
+            "Should have made a real silo")
+        self.assertEqual(machine.silo_channel[kwargs['silo_key']], ch,
+            "Silo should be associated with the right channel")
+
+        # finish execution
+        result.callback('output')
+
+        self.assertNotIn(kwargs['silo_key'], machine.silos,
+            "Should have closed the silo")
+        self.assertEqual(self.successResultOf(out_d), 'output',
+            "Should return the output of runScript")
 
 
     def test_channel_closed(self):
@@ -120,9 +138,23 @@ class TokenInternalsTest(TestCase):
         self.fail('write me')
 
 
+    def test_run_noChannel(self):
+        """
+        You don't have to provide a channel to run()
+        """
+        self.fail('write me')
+
+
     def test_channel_connect_withPendingQuestions(self):
         """
         Deliver all pending question to channels when they connect.
+        """
+        self.fail('write me')
+
+
+    def test_channel_connect_noSuchChannel(self):
+        """
+        You can't connect to a channel that doesn't exist.
         """
         self.fail('write me')
 
@@ -160,6 +192,14 @@ class TokenInternalsTest(TestCase):
         """
         Silos should not exist forever.
         """
+        self.fail('write me')
+
+
+    def test_makeSilo_nonExistingChannel(self):
+        """
+        It is an error to make a silo attached to a channel that doesn't exist.
+        """
+        self.fail('write me')
 
 
 

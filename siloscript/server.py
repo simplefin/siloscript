@@ -30,9 +30,9 @@ class TokenInternals(object):
     token_salt = 'dssdfh09w83hof08hasodifaosdnfsadf'
 
 
-    def __init__(self, store, script_root):
+    def __init__(self, store, runner):
         self.store = store
-        self.script_root = FilePath(script_root)
+        self.runner = runner
 
         self.receivers = defaultdict(list)
         self.silos = {}
@@ -117,21 +117,25 @@ class TokenInternals(object):
         """
         XXX
         """
+        self.silos.pop(silo_key)
         channel_key = self.silo_channel.pop(silo_key)
         self.channel_close(channel_key)
 
 
-    @defer.inlineCallbacks
-    def run_runScript(self, user, script, args):
+    def run(self, user, script, args, channel_key):
         """
         XXX
         """
-        script_fp = self.script_root
-        for segment in script.split('/'):
-            script_fp = script_fp.child(segment)
-        out, err, exit = yield utils.getProcessOutputAndValue(script_fp.path,
-                args)
-        defer.returnValue((out, err, exit))
+        silo_key = self.control_makeSilo(user, script, channel_key)
+        def cleanup(result):
+            self.control_closeSilo(silo_key)
+            return result
+        d = self.runner.runScript(
+            silo_key=silo_key,
+            script=script,
+            args=args)
+        d.addBoth(cleanup)
+        return d
 
 
     def data_get(self, silo_key, key, prompt=None):
