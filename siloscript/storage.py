@@ -1,7 +1,8 @@
 # Copyright (c) The SimpleFIN Team
 # See LICENSE for details.
 
-from twisted.internet import defer
+from twisted.internet import defer, threads
+from twisted.python import log
 
 from functools import wraps
 
@@ -14,7 +15,7 @@ def async(f):
 
 class MemoryStore(object):
     """
-    XXX
+    I store key-value pairs in memory.
     """
 
     def __init__(self):
@@ -27,6 +28,78 @@ class MemoryStore(object):
     @async
     def put(self, user, silo, key, value):
         self._data[(user, silo, key)] = value
+
+    @async
+    def delete(self, user, silo, key):
+        self._data.pop((user, silo, key))
+
+
+
+class gnupgWrapper(object):
+    """
+    I wrap a key-value store with encryption.
+    """
+
+    def __init__(self, gpg, store, passphrase=None):
+        """
+        @param gpg: A GPG instance.
+        @param store: A data store.
+        @param passphrase: Optional passphrase to use for the key.
+        """
+        self._gpg = gpg
+        self._store = store
+        self._passphrase = passphrase
+        self._sem = defer.DeferredSemaphore(1)
+
+
+    def _getKey(self):
+        """
+        Get a key, or wait for the key being generated.
+        """
+        return self._sem.run(self._actualGetKey)
+
+
+    @defer.inlineCallbacks
+    def _actualGetKey(self):
+        """
+        Get a key or create one.  Use L{_getKey} rather than me directly.
+        """
+        private_keys = self._gpg.list_keys(True)
+        if not private_keys:
+            log.msg("generating key", system='gnupgwrapper')
+
+            kwargs = dict(key_type="RSA", key_length=2048)
+            if self._passphrase is not None:
+                kwargs['passphrase'] = self._passphrase
+            input_data = self._gpg.gen_key_input(**kwargs)
+            key = yield threads.deferToThread(self._gpg.gen_key, input_data)
+            log.msg("key generated", system='gnupgwrapper')
+            private_keys = self._gpg.list_keys(True)
+
+        key = private_keys[0]
+        defer.returnValue(key)
+
+
+    @defer.inlineCallbacks
+    def put(self, user, silo, key, value):
+        crypto_key = yield self._getKey()
+        cipher = yield threads.deferToThread(self._gpg.encrypt,
+            value, crypto_key['keyid'], passphrase=self._passphrase)
+        result = yield self._store.put(user, silo, key, str(cipher))
+        defer.returnValue(result)
+
+
+    @defer.inlineCallbacks
+    def get(self, user, silo, key):
+        cipher = yield self._store.get(user, silo, key)
+        yield self._getKey()
+        plain = yield threads.deferToThread(self._gpg.decrypt, cipher,
+            passphrase=self._passphrase)
+        defer.returnValue(str(plain))
+
+
+    def delete(self, user, silo, key):
+        return self._store.delete(user, silo, key)
 
 
 
