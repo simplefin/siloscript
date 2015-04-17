@@ -4,7 +4,9 @@
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer
 
-from siloscript.storage import Silo, MemoryStore
+import gnupg
+
+from siloscript.storage import Silo, MemoryStore, gnupgWrapper
 
 
 class StoreMixin(object):
@@ -82,6 +84,24 @@ class MemoryStoreTest(TestCase, StoreMixin):
     def getEmptyStore(self):
         return MemoryStore()
 
+
+
+class gnupgWrapperTest(TestCase, StoreMixin):
+
+
+    def getEmptyStore(self):
+        tmpdir = self.mktemp()
+        gpg = gnupg.GPG(homedir=tmpdir)
+        return gnupgWrapper(gpg, MemoryStore())
+
+
+class gnupgWrapperTest_with_passphrase(TestCase, StoreMixin):
+
+
+    def getEmptyStore(self):
+        tmpdir = self.mktemp()
+        gpg = gnupg.GPG(homedir=tmpdir)
+        return gnupgWrapper(gpg, MemoryStore(), passphrase='foo')
 
 
 class SiloTest(TestCase):
