@@ -33,7 +33,7 @@ server_parser.add_argument('--scripts', '-s',
     default=root.child('data').child('scripts').path,
     help='Path to executable scripts.  (default: %(default)s)')
 server_parser.add_argument('--static-root', '-S',
-    default=root.child('data').child('static'),
+    default=root.child('data').child('static').path,
     help='Path to static files served at /static.  (default: %(default)s)')
 server_parser.set_defaults(func=serve)
 
