@@ -1,5 +1,11 @@
+sudo: false
 language: python
 python: 2.7
+
+addons:
+  apt:
+    packages:
+    - gpg2
 
 env:
     - TOX_ENV=pyflakes
