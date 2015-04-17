@@ -122,18 +122,19 @@ class TokenInternals(object):
         self.channel_close(channel_key)
 
 
-    def run(self, user, script, args, channel_key):
+    def run(self, user, executable, args, env, channel_key):
         """
         XXX
         """
-        silo_key = self.control_makeSilo(user, script, channel_key)
+        silo_key = self.control_makeSilo(user, executable, channel_key)
         def cleanup(result):
             self.control_closeSilo(silo_key)
             return result
-        d = self.runner.runScript(
+        d = self.runner.runWithSilo(
             silo_key=silo_key,
-            script=script,
-            args=args)
+            executable=executable,
+            args=args,
+            env=env)
         d.addBoth(cleanup)
         return d
 

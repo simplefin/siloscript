@@ -10,6 +10,7 @@ from siloscript.storage import MemoryStore
 from siloscript.server import TokenInternals
 
 
+
 class TokenInternalsTest(TestCase):
 
 
@@ -87,7 +88,7 @@ class TokenInternalsTest(TestCase):
         runner = MagicMock()
 
         result = defer.Deferred()
-        runner.runScript.return_value = result
+        runner.runWithSilo.return_value = result
 
         store = MemoryStore()
         machine = TokenInternals(
@@ -98,17 +99,19 @@ class TokenInternalsTest(TestCase):
 
         # start execution
         out_d = machine.run('jim', 'foo.sh', args=['hey'],
+            env={'HEY': 'GUYS'},
             channel_key=ch)
         self.assertEqual(out_d.called, False, "Should not have finished yet")
 
         # while it's still running
-        self.assertEqual(runner.runScript.call_count, 1,
-            "Should have called runScript")
-        args, kwargs = runner.runScript.call_args
+        self.assertEqual(runner.runWithSilo.call_count, 1,
+            "Should have called runWithSilo")
+        args, kwargs = runner.runWithSilo.call_args
         self.assertIn('silo_key', kwargs,
             "Should have given the runner a silo_key")
-        self.assertEqual(kwargs['script'], 'foo.sh')
+        self.assertEqual(kwargs['executable'], 'foo.sh')
         self.assertEqual(kwargs['args'], ['hey'])
+        self.assertEqual(kwargs['env'], {'HEY': 'GUYS'})
         self.assertIn(kwargs['silo_key'], machine.silos,
             "Should have made a real silo")
         self.assertEqual(machine.silo_channel[kwargs['silo_key']], ch,
@@ -120,7 +123,7 @@ class TokenInternalsTest(TestCase):
         self.assertNotIn(kwargs['silo_key'], machine.silos,
             "Should have closed the silo")
         self.assertEqual(self.successResultOf(out_d), 'output',
-            "Should return the output of runScript")
+            "Should return the output of runWithSilo")
 
 
     def test_channel_closed(self):
