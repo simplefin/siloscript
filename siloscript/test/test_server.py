@@ -126,6 +126,12 @@ class TokenInternalsTest(TestCase):
             "Should return the output of runWithSilo")
 
 
+    def test_channel_disconnect(self):
+        """
+        You can disconnect from a channel
+        """
+        self.fail('write me')
+
     def test_channel_closed(self):
         """
         You can't connect to a closed channel.  A notifyClosed on a closed
