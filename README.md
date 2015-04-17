@@ -59,9 +59,9 @@ To get previously stored data but **never** ask the user, omit the `prompt=XXX` 
     curl ${DATASTORE_URL}/cookies
 
 
-# Running the test #
+# Running the tests #
 
-The tests can be very slow (especially the ones that do crypto).  On Ubuntu, you can speed things up by doing the following (based on (this article)[https://www.digitalocean.com/community/tutorials/how-to-setup-additional-entropy-for-cloud-servers-using-haveged]):
+The tests can be very slow (especially the ones that do crypto).  On Ubuntu, you can speed things up by doing the following (based on [this article](https://www.digitalocean.com/community/tutorials/how-to-setup-additional-entropy-for-cloud-servers-using-haveged)):
 
 	apt-get install haveged
 
