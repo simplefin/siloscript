@@ -28,6 +28,10 @@ class MemoryStore(object):
     def put(self, user, silo, key, value):
         self._data[(user, silo, key)] = value
 
+    @async
+    def delete(self, user, silo, key):
+        self._data.pop((user, silo, key))
+
 
 
 class Silo(object):

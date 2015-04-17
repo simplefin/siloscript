@@ -7,6 +7,82 @@ from twisted.internet import defer
 from siloscript.storage import Silo, MemoryStore
 
 
+class StoreMixin(object):
+
+
+    def getEmptyStore(self):
+        raise NotImplementedError("You must implement getEmptyStore")
+
+
+    @defer.inlineCallbacks
+    def test_basic(self):
+        """
+        You should be able to set and get stuff.
+        """
+        store = yield self.getEmptyStore()
+        yield store.put('jim', 'silo1', 'foo', 'FOO')
+        val = yield store.get('jim', 'silo1', 'foo')
+        self.assertEqual(val, 'FOO')
+
+    
+    @defer.inlineCallbacks
+    def test_get_user_KeyError(self):
+        """
+        If the user key doesn't exist, it should return a key error.
+        """
+        store = yield self.getEmptyStore()
+        yield store.put('jim', 'silo1', 'foo', 'FOO')
+        yield self.assertFailure(store.get('notjim', 'silo1', 'foo'), KeyError)
+
+
+    @defer.inlineCallbacks
+    def test_get_silo_KeyError(self):
+        """
+        If the silo key doesn't exist, it should return a key error.
+        """
+        store = yield self.getEmptyStore()
+        yield store.put('jim', 'silo1', 'foo', 'FOO')
+        yield self.assertFailure(store.get('jim', 'silo2', 'foo'), KeyError)
+
+
+    @defer.inlineCallbacks
+    def test_get_key_KeyError(self):
+        """
+        If the key doesn't exist, it should return a key error.
+        """
+        store = yield self.getEmptyStore()
+        yield store.put('jim', 'silo1', 'foo', 'FOO')
+        yield self.assertFailure(store.get('jim', 'silo1', 'foom'), KeyError)
+
+
+    @defer.inlineCallbacks
+    def test_delete(self):
+        """
+        You can delete keys.
+        """
+        store = yield self.getEmptyStore()
+        yield store.put('jim', 'silo1', 'foo', 'FOO')
+        yield store.delete('jim', 'silo1', 'foo')
+        yield self.assertFailure(store.get('jim', 'silo1', 'foo'), KeyError)
+
+
+    @defer.inlineCallbacks
+    def test_delete_KeyError(self):
+        """
+        You can't delete keys that aren't there.
+        """
+        store = yield self.getEmptyStore()
+        yield self.assertFailure(store.delete('jim', 'silo1', 'foo'), KeyError)
+
+
+
+class MemoryStoreTest(TestCase, StoreMixin):
+
+
+    def getEmptyStore(self):
+        return MemoryStore()
+
+
 
 class SiloTest(TestCase):
 
