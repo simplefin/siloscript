@@ -26,13 +26,27 @@ def serve(args):
 
 
 server_parser = subparsers.add_parser('serve', help='Start HTTP server')
-server_parser.add_argument('--port', '-p',
-    type=int,
-    default=9600,
-    help='Port to serve HTTP server on. (default: %(default)s)')
+
+server_parser.add_argument('--control-endpoint', '-c',
+    type=str,
+    default='tcp:7600',
+    help='Endpoint to serve control HTTP server on. This should NOT be exposed'
+         ' to the public Internet.  (default: %(default)s)')
+server_parser.add_argument('--data-endpoint', '-d',
+    type=str,
+    default='tcp:8600',
+    help='Endpoint to serve data HTTP server on. This should NOT be exposed'
+         ' to the public Internet.  (default: %(default)s)')
+server_parser.add_argument('--public-endpoint', '-p',
+    type=str,
+    default='tcp:9600',
+    help='Endpoint to serve public HTTP server on. This SHOULD be exposed'
+         ' to the public Internet.  (default: %(default)s)')
+
 server_parser.add_argument('--scripts', '-s',
     default=root.child('data').child('scripts').path,
     help='Path to executable scripts.  (default: %(default)s)')
+
 server_parser.add_argument('--static-root', '-S',
     default=root.child('data').child('static').path,
     help='Path to static files served at /static.  (default: %(default)s)')

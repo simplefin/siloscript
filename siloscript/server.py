@@ -14,9 +14,155 @@ import sys
 
 import json
 from functools import partial
+from collections import defaultdict
 from uuid import uuid4
 
 from siloscript.storage import MemoryStore, Silo
+
+
+
+class TokenInternals(object):
+    """
+    XXX
+    """
+
+    token_prefix = ':private:'
+    token_salt = 'dssdfh09w83hof08hasodifaosdnfsadf'
+
+
+    def __init__(self, store, script_root):
+        self.store = store
+        self.script_root = FilePath(script_root)
+
+        self.receivers = defaultdict(list)
+        self.silos = {}
+        self.silo_channel = {}
+        self.pending_questions_by_id = {}
+        self.pending_channelClosed_notifications = defaultdict(list)
+
+
+    def channel_open(self):
+        """
+        XXX
+        """
+        key = 'CH-%s' % (uuid4(),)
+        return key
+
+
+    def channel_connect(self, channel_key, receiver):
+        """
+        XXX
+        """
+        self.receivers[channel_key].append(receiver)
+
+
+    def channel_notifyClosed(self, channel_key):
+        """
+        XXX
+        """
+        d = defer.Deferred()
+        self.pending_channelClosed_notifications[channel_key].append(d)
+        return d
+
+
+    def channel_close(self, channel_key):
+        """
+        XXX
+        """
+        for d in self.pending_channelClosed_notifications[channel_key]:
+            d.callback(channel_key)
+
+
+    def _askChannel(self, channel_key, prompt):
+        """
+        XXX
+        """
+        question_id = 'Q-%s' % (uuid4(),)
+        
+        answer_d = defer.Deferred()
+        self.pending_questions_by_id[question_id] = {
+            'd': answer_d,
+        }
+
+        for receiver in self.receivers[channel_key]:
+            receiver({
+                'id': question_id,
+                'prompt': prompt,
+            })
+
+        return answer_d
+
+
+    def answer_question(self, question_id, answer):
+        """
+        XXX
+        """
+        question = self.pending_questions_by_id.pop(question_id)
+        question['d'].callback(answer)
+
+
+    def control_makeSilo(self, user, subkey, channel_key):
+        """
+        XXX
+        """
+        func = partial(self._askChannel, channel_key)
+        silo = Silo(self.store, user, subkey, func)
+        key = 'SILO-%s' % (uuid4(),)
+        self.silos[key] = silo
+        self.silo_channel[key] = channel_key
+        return key
+
+
+    def control_closeSilo(self, silo_key):
+        """
+        XXX
+        """
+        channel_key = self.silo_channel.pop(silo_key)
+        self.channel_close(channel_key)
+
+
+    @defer.inlineCallbacks
+    def run_runScript(self, user, script, args):
+        """
+        XXX
+        """
+        script_fp = self.script_root
+        for segment in script.split('/'):
+            script_fp = script_fp.child(segment)
+        out, err, exit = yield utils.getProcessOutputAndValue(script_fp.path,
+                args)
+        defer.returnValue((out, err, exit))
+
+
+    def data_get(self, silo_key, key, prompt=None):
+        """
+        XXX
+        """
+        return self.silos[silo_key].get(key, prompt)
+
+
+    def data_put(self, silo_key, key, value):
+        """
+        XXX
+        """
+        return self.silos[silo_key].put(key, value)
+
+
+    @defer.inlineCallbacks
+    def data_createToken(self, silo_key, value):
+        """
+        XXX
+        """
+        silo = self.silos[silo_key]
+        h = hashlib.sha1(value + self.token_salt).hexdigest()
+        key = self.token_prefix + h
+        try:
+            opaque = yield silo.get(key)
+        except KeyError:
+            opaque = 'TK-%s' % (uuid4(),)
+            yield silo.put(key, opaque)
+        defer.returnValue(opaque)
+
 
 
 
