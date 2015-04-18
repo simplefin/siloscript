@@ -14,7 +14,7 @@ class SiloWrapperTest(TestCase):
 
     
     @defer.inlineCallbacks
-    def test_runsWith_DATASTORE_URL(self):
+    def test_runWithSilo_DATASTORE_URL(self):
         """
         The datastore url should be computed and given as an environment
         variable to the runner.

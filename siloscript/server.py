@@ -11,7 +11,7 @@ import hashlib
 import sys
 
 import json
-from functools import partial
+from functools import partial, wraps
 from collections import defaultdict
 from uuid import uuid4
 
@@ -19,7 +19,7 @@ from siloscript.storage import MemoryStore, Silo
 
 
 
-class TokenInternals(object):
+class Machine(object):
     """
     XXX
     """
@@ -175,6 +175,18 @@ def sseMsg(name, data):
 
 
 
+def cors(f):
+    """
+    Decorate a handler to support CORS.
+    """
+    @wraps(f)
+    def deco(instance, request, *args, **kwargs):
+        request.setHeader('Access-Control-Allow-Origin', '*')
+        return f(instance, request, *args, **kwargs)
+    return deco
+
+
+
 class PublicWebApp(object):
 
     app = Klein()
@@ -183,11 +195,14 @@ class PublicWebApp(object):
         self.machine = machine
 
 
-    @app.route('/answer/<string:question_id>', methods=['POST'])
+    @app.route('/answer/<string:question_id>', methods=['POST', 'OPTIONS'])
+    @cors
     def answer_question(self, request, question_id):
         """
         Answer a question posed to a user.
         """
+        if request.method == 'OPTIONS':
+            return
         answer = request.content.read()
         self.machine.answer_question(question_id, answer)
 
@@ -220,18 +235,19 @@ class ControlWebApp(object):
         request.setHeader('Content-type', 'text/event-stream')
         request.write(sseMsg('channel_key', channel_key))
 
-        d = defer.Deferred()
-        self.channel_request[channel_key] = {
-            'req': request,
-            'd': d,
-        }
+        def receiver(request, data):
+            request.write(sseMsg('question', {
+                'id': data['id'],
+                'prompt': data['prompt'],
+            }))
+
+        self.machine.channel_connect(channel_key, partial(receiver, request))
         
         # XXX need to add disconnect checking
         # request.notifyFinish().addCallback(rm, channel_key)
-        return d
+        return defer.Deferred()
 
     @app.route('/run/<string:user>', methods=['POST'])
-    @defer.inlineCallbacks
     def run(self, request, user):
         """
         Run a script for a user.
@@ -240,7 +256,11 @@ class ControlWebApp(object):
         channel_key = request.args.get('channel_key', [None])[0]
         args = json.loads(request.args.get('args', ["[]"])[0])
 
-        return self.machine.run(user, script, args, {}, channel_key)
+        d = self.machine.run(user, script, args, {}, channel_key)
+        # just return output
+        # XXX change this later to look at exit code
+        d.addCallback(lambda x: x[0])
+        return d
 
 
 
@@ -300,14 +320,4 @@ class UIServer(object):
         self.channel_request = {}
         self.pending_questions = {}
 
-    
 
-
-    
-
-
-if __name__ == '__main__':
-    log.startLogging(sys.stdout)
-    store = MemoryStore()
-    server = UIServer(store, 'scripts', static_root='static')
-    server.app.run('0.0.0.0', 9600)

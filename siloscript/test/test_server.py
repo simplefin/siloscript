@@ -7,11 +7,11 @@ from twisted.internet import defer
 from mock import MagicMock
 
 from siloscript.storage import MemoryStore
-from siloscript.server import TokenInternals
+from siloscript.server import Machine
 
 
 
-class TokenInternalsTest(TestCase):
+class MachineTest(TestCase):
 
 
     @defer.inlineCallbacks
@@ -20,7 +20,7 @@ class TokenInternalsTest(TestCase):
         It should work basically like this.
         """        
         store = MemoryStore()
-        machine = TokenInternals(
+        machine = Machine(
             store=store,
             runner='not real')
 
@@ -91,7 +91,7 @@ class TokenInternalsTest(TestCase):
         runner.runWithSilo.return_value = result
 
         store = MemoryStore()
-        machine = TokenInternals(
+        machine = Machine(
             store=store,
             runner=runner)
 

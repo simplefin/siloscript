@@ -137,7 +137,7 @@
       console.log('submitting answer', question, answer);
       return $http({
           method: 'POST',
-          url: '/question/' + question.id,
+          url: 'http://127.0.0.1:9600/answer/' + question.id,
           data: answer,
           headers: {'Content-Type': 'text/plain'},
       })
