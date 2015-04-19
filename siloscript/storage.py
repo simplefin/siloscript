@@ -5,7 +5,6 @@ from twisted.internet import defer, threads
 from twisted.python import log
 
 from siloscript.util import async
-from siloscript.error import InvalidKey
 
 
 

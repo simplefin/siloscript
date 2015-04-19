@@ -6,7 +6,8 @@ from twisted.internet import defer
 
 from mock import MagicMock
 
-from siloscript.storage import MemoryStore, InvalidKey
+from siloscript.storage import MemoryStore
+from siloscript.error import InvalidKey
 from siloscript.server import Machine, NotFound
 
 
@@ -135,7 +136,6 @@ class MachineTest(TestCase):
         # XXX replace this with a better fake
         runner = MagicMock()
 
-        result = defer.Deferred()
         runner.runWithSilo.return_value = defer.succeed('hi')
 
         store = MemoryStore()

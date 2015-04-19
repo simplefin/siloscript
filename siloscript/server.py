@@ -3,21 +3,18 @@
 
 from twisted.internet import defer
 from klein import Klein
-from twisted.python import log
-from twisted.python.filepath import FilePath
 from twisted.web.static import File
 
 import hashlib
-import sys
 
 import json
 from functools import partial, wraps
 from collections import defaultdict
 from uuid import uuid4
 
-from siloscript.storage import MemoryStore, Silo, InvalidKey
+from siloscript.storage import Silo
 from siloscript.util import async
-from siloscript.error import NotFound
+from siloscript.error import NotFound, InvalidKey
 
 
 
