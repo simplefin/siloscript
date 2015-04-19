@@ -23,6 +23,9 @@ from siloscript.error import NotFound
 
 class Machine(object):
     """
+    I coordinate the running scripts that want user input and users that
+    are ready to give it.
+
     XXX
     """
 
@@ -46,7 +49,7 @@ class Machine(object):
 
     def channel_open(self):
         """
-        XXX
+        Create a new channel on which to receive questions.
         """
         key = 'CH-%s' % (uuid4(),)
         self.channels.add(key)
@@ -55,7 +58,11 @@ class Machine(object):
 
     def channel_connect(self, channel_key, receiver):
         """
-        XXX
+        Register a function to be called for each question sent to a channel.
+
+        @param channel_key: A channel key as returned by L{channel_open}.
+        @param receiver: A function that will be called with a single argument:
+            a dictionary with an C{'id'} and C{'prompt'}.
         """
         if channel_key not in self.channels:
             raise KeyError("No such channel")
@@ -66,14 +73,17 @@ class Machine(object):
 
     def channel_disconnect(self, channel_key, receiver):
         """
-        XXX
+        Opposite of L{channel_connect}.
         """
         self.receivers[channel_key].remove(receiver)
 
 
     def channel_notifyClosed(self, channel_key):
         """
-        XXX
+        Return a Deferred which will fire when the given channel is closed.
+        If no such channel exists, the Deferred will fire immediately.
+
+        @param channel_key: A channel key as returned by L{channel_open}.
         """
         if channel_key not in self.channels:
             return defer.succeed(None)
@@ -84,7 +94,9 @@ class Machine(object):
 
     def channel_close(self, channel_key):
         """
-        XXX
+        Close a channel so that it won't receive any more questions.
+
+        @param channel_key: A channel key as returned by L{channel_open}.
         """
         if channel_key in self.channels:
             self.channels.remove(channel_key)
@@ -94,7 +106,14 @@ class Machine(object):
 
     def channel_prompt(self, channel_key, prompt):
         """
-        XXX
+        Ask a question of a channel.
+
+        @param channel_key: A channel key as returned by L{channel_open}.
+        @param prompt: A string, human-friendly form of the question you want
+            answered.
+
+        @return: A L{Deferred} which will fire with the answer if one is
+            given.
         """
         question_id = 'Q-%s' % (uuid4(),)
         
@@ -118,7 +137,11 @@ class Machine(object):
 
     def answer_question(self, question_id, answer):
         """
-        XXX
+        Answer a question posed by L{channel_prompt} and eventually received
+        by receivers registered with L{channel_connect}.
+
+        @param question_id: Id of question that was sent to receiver.
+        @param answer: string answer.
         """
         question = self.pending_questions_by_id.pop(question_id)
         self.pending_questions_by_channel[question['channel_key']]\
@@ -129,7 +152,18 @@ class Machine(object):
 
     def control_makeSilo(self, user, subkey, channel_key=None):
         """
-        XXX
+        Create a data silo scoped to the given C{user} and C{subkey}.
+
+        The caller is responsible to do any authentication/authorization
+        of this user for this subkey.
+
+        @param user: string user identifier.
+        @param subkey: string subkey identifier.  
+        @param channel_key: optional channel key (as returned by
+            L{channel_open}) if user input will be available when data is
+            requested and not available from the data store.
+
+        @return: string silo key.
         """
         func = None
         if channel_key:
@@ -145,7 +179,9 @@ class Machine(object):
 
     def control_closeSilo(self, silo_key):
         """
-        XXX
+        Close a silo so that no more reads/writes can be done on it.
+
+        @param silo_key: A string silo key as returned by L{control_makeSilo}.
         """
         self.silos.pop(silo_key)
         channel_key = self.silo_channel.pop(silo_key)
@@ -154,7 +190,19 @@ class Machine(object):
 
     def run(self, user, executable, args, env, channel_key=None):
         """
-        XXX
+        Create a data silo for the given user and script, then run the script.
+
+        The caller is responsible for authenticating the user.
+
+        @param user: string user identifer.
+        @param executable: script name to run
+        @param args: additional command-line args for execution.
+        @param env: additional environment variable to set for script.
+        @param channel_key: If user input is available, this is a channel_key
+            as returned by L{channel_open}.  See also L{control_makeSilo}.
+
+        @return: the (L{Deferred}) stdout, stderr, rc of the process or else
+            a failure.
         """
         silo_key = self.control_makeSilo(user, executable, channel_key)
         def cleanup(result):
@@ -171,7 +219,7 @@ class Machine(object):
 
     def _data_validateUserSuppliedKey(self, key):
         """
-        XXX
+        Validate that the given user key is okay.
         """
         if key.startswith(self.invalid_key_prefix):
             raise InvalidKey('Invalid key: %r' % (key,))
@@ -180,7 +228,15 @@ class Machine(object):
     @async
     def data_get(self, silo_key, key, prompt=None):
         """
-        XXX
+        Get data from a user-scoped silo.
+
+        @param silo_key: A key as returned by L{control_makeSilo}.
+        @param key: string key identifing data wanted.
+        @param prompt: If given, this is a human-friendly string to be used to
+            prompt a user for the value in case it's no in the datastore
+            already.
+
+        @return: The L{Deferred} value (either cached or from the user).
         """
         if silo_key not in self.silos:
             raise NotFound(silo_key)
@@ -191,7 +247,11 @@ class Machine(object):
     @async
     def data_put(self, silo_key, key, value):
         """
-        XXX
+        Put a value in the user-scope silo.
+
+        @param silo_key: A key as returned by L{control_makeSilo}.
+        @param key: string key of data.
+        @param value: string value of data.
         """
         if silo_key not in self.silos:
             raise NotFound(silo_key)
@@ -202,7 +262,14 @@ class Machine(object):
     @defer.inlineCallbacks
     def data_createToken(self, silo_key, value):
         """
-        XXX
+        Exchange a piece of data for a consistent, opaque token.  This is
+        useful for sensitive pieces of data, such as bank account credentials,
+        or a social security number.  The resulting value is random and not
+        derived from the given value in any way.
+
+        @param silo_key: A key as returned by L{control_makeSilo}.
+        @param value: The probably sensitive piece of data you want to
+            tokenize.
         """
         if silo_key not in self.silos:
             raise NotFound(silo_key)
@@ -352,22 +419,5 @@ class DataWebApp(object):
         except KeyError:
             request.setResponseCode(404)
 
-
-
-
-class UIServer(object):
-
-    app = Klein()
-
-    my_root = 'http://127.0.0.1:9600'
-
-    def __init__(self, store, script_root, static_root):
-        self.store = store
-        self.script_root = FilePath(script_root)
-        self.static_root = static_root
-
-        self.silos = {}
-        self.channel_request = {}
-        self.pending_questions = {}
 
 

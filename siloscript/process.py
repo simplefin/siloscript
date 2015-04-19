@@ -19,7 +19,10 @@ class SiloWrapper(object):
 
     def __init__(self, data_url_root, runner):
         """
-        XXX
+        @param data_url_root: Root URL onto which silo keys will be appended
+            when given to the running processes.
+        @param runner: An object with a C{run} method of the same signature
+            as L{LocalScriptRunner.run}.
         """
         self.data_url_root = data_url_root
         self.runner = runner
@@ -27,7 +30,13 @@ class SiloWrapper(object):
 
     def runWithSilo(self, silo_key, executable, args, env):
         """
-        XXX
+        Run a script with access to the given silo.
+
+        @param silo_key: string silo key.
+        @param executable: Script within the grasp of the runner to run.
+        @param args: Any extra args to pass on command line when spawning
+            process.
+        @param env: Any additional environment variables to set for the process.
         """
         env.update({
             self.DATASTORE_URL_ENV_NAME: '%s/%s' % (
@@ -45,7 +54,7 @@ class LocalScriptRunner(object):
 
     def __init__(self, root):
         """
-        XXX
+        @param root: Root path of executable scripts.
         """
         self.root = FilePath(root)
 
