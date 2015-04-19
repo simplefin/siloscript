@@ -5,8 +5,8 @@ from twisted.trial.unittest import TestCase
 from twisted.python.filepath import FilePath
 from twisted.internet import defer
 
-
 from siloscript.process import LocalScriptRunner, SiloWrapper
+from siloscript.error import NotFound
 
 
 
@@ -59,13 +59,24 @@ class LocalScriptRunnerTest(TestCase):
         self.assertEqual(rc, 0)
 
 
-    def test_executable(self):
-        self.fail('write me: scripts must be executable')
+    @defer.inlineCallbacks
+    def test_exists_and_within_path(self):
+        root = FilePath(self.mktemp())
+        root.makedirs()
+        runner = LocalScriptRunner(root.path)
+        yield self.assertFailure(runner.run('foo.sh'), NotFound)
+        yield self.assertFailure(runner.run('ls'), NotFound)
+        yield self.assertFailure(runner.run('/bin/echo', args=['hi']),
+            NotFound)
 
 
-    def test_exists(self):
-        self.fail('write me: scripts must exist')
-
-
+    @defer.inlineCallbacks
     def test_path(self):
-        self.fail('write me: the path the script is run from should be set')
+        root = FilePath(self.mktemp())
+        root.makedirs()
+        foo = root.child('foo.sh')
+        foo.setContent('#!/bin/bash\npwd')
+        runner = LocalScriptRunner(root.path)
+        out, err, rc = yield runner.run('foo.sh')
+        self.assertEqual(out, root.path + '\n', "Should set the path to the "
+            "directory of the script")

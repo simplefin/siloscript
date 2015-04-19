@@ -15,7 +15,9 @@ from functools import partial, wraps
 from collections import defaultdict
 from uuid import uuid4
 
-from siloscript.storage import MemoryStore, Silo
+from siloscript.storage import MemoryStore, Silo, InvalidKey
+from siloscript.util import async
+from siloscript.error import NotFound
 
 
 
@@ -24,6 +26,7 @@ class Machine(object):
     XXX
     """
 
+    invalid_key_prefix = ':'
     token_prefix = ':private:'
     token_salt = 'dssdfh09w83hof08hasodifaosdnfsadf'
 
@@ -32,11 +35,13 @@ class Machine(object):
         self.store = store
         self.runner = runner
 
+        self.channels = set()
         self.receivers = defaultdict(list)
         self.silos = {}
         self.silo_channel = {}
         self.pending_questions_by_id = {}
         self.pending_channelClosed_notifications = defaultdict(list)
+        self.pending_questions_by_channel = defaultdict(list)
 
 
     def channel_open(self):
@@ -44,6 +49,7 @@ class Machine(object):
         XXX
         """
         key = 'CH-%s' % (uuid4(),)
+        self.channels.add(key)
         return key
 
 
@@ -51,13 +57,26 @@ class Machine(object):
         """
         XXX
         """
+        if channel_key not in self.channels:
+            raise KeyError("No such channel")
         self.receivers[channel_key].append(receiver)
+        for question in list(self.pending_questions_by_channel[channel_key]):
+            receiver(question['data'])
+
+
+    def channel_disconnect(self, channel_key, receiver):
+        """
+        XXX
+        """
+        self.receivers[channel_key].remove(receiver)
 
 
     def channel_notifyClosed(self, channel_key):
         """
         XXX
         """
+        if channel_key not in self.channels:
+            return defer.succeed(None)
         d = defer.Deferred()
         self.pending_channelClosed_notifications[channel_key].append(d)
         return d
@@ -67,26 +86,32 @@ class Machine(object):
         """
         XXX
         """
+        if channel_key in self.channels:
+            self.channels.remove(channel_key)
         for d in self.pending_channelClosed_notifications[channel_key]:
             d.callback(channel_key)
 
 
-    def _askChannel(self, channel_key, prompt):
+    def channel_prompt(self, channel_key, prompt):
         """
         XXX
         """
         question_id = 'Q-%s' % (uuid4(),)
         
         answer_d = defer.Deferred()
-        self.pending_questions_by_id[question_id] = {
+        question = {
+            'channel_key': channel_key,
             'd': answer_d,
-        }
-
-        for receiver in self.receivers[channel_key]:
-            receiver({
+            'data': {
                 'id': question_id,
                 'prompt': prompt,
-            })
+            },
+        }
+        self.pending_questions_by_id[question_id] = question
+        self.pending_questions_by_channel[channel_key].append(question)
+
+        for receiver in self.receivers[channel_key]:
+            receiver(question['data'])
 
         return answer_d
 
@@ -96,14 +121,21 @@ class Machine(object):
         XXX
         """
         question = self.pending_questions_by_id.pop(question_id)
+        self.pending_questions_by_channel[question['channel_key']]\
+            .remove(question)
         question['d'].callback(answer)
 
 
-    def control_makeSilo(self, user, subkey, channel_key):
+
+    def control_makeSilo(self, user, subkey, channel_key=None):
         """
         XXX
         """
-        func = partial(self._askChannel, channel_key)
+        func = None
+        if channel_key:
+            if channel_key not in self.channels:
+                raise KeyError("No such channel: %r" % (channel_key,))
+            func = partial(self.channel_prompt, channel_key)
         silo = Silo(self.store, user, subkey, func)
         key = 'SILO-%s' % (uuid4(),)
         self.silos[key] = silo
@@ -120,7 +152,7 @@ class Machine(object):
         self.channel_close(channel_key)
 
 
-    def run(self, user, executable, args, env, channel_key):
+    def run(self, user, executable, args, env, channel_key=None):
         """
         XXX
         """
@@ -137,17 +169,33 @@ class Machine(object):
         return d
 
 
+    def _data_validateUserSuppliedKey(self, key):
+        """
+        XXX
+        """
+        if key.startswith(self.invalid_key_prefix):
+            raise InvalidKey('Invalid key: %r' % (key,))
+
+
+    @async
     def data_get(self, silo_key, key, prompt=None):
         """
         XXX
         """
+        if silo_key not in self.silos:
+            raise NotFound(silo_key)
+        self._data_validateUserSuppliedKey(key)
         return self.silos[silo_key].get(key, prompt)
 
 
+    @async
     def data_put(self, silo_key, key, value):
         """
         XXX
         """
+        if silo_key not in self.silos:
+            raise NotFound(silo_key)
+        self._data_validateUserSuppliedKey(key)
         return self.silos[silo_key].put(key, value)
 
 
@@ -156,6 +204,8 @@ class Machine(object):
         """
         XXX
         """
+        if silo_key not in self.silos:
+            raise NotFound(silo_key)
         silo = self.silos[silo_key]
         h = hashlib.sha1(value + self.token_salt).hexdigest()
         key = self.token_prefix + h

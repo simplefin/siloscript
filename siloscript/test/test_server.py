@@ -6,13 +6,14 @@ from twisted.internet import defer
 
 from mock import MagicMock
 
-from siloscript.storage import MemoryStore
-from siloscript.server import Machine
+from siloscript.storage import MemoryStore, InvalidKey
+from siloscript.server import Machine, NotFound
 
 
 
 class MachineTest(TestCase):
 
+    timeout = 2
 
     @defer.inlineCallbacks
     def test_basic_functional(self):
@@ -126,67 +127,123 @@ class MachineTest(TestCase):
             "Should return the output of runWithSilo")
 
 
+    @defer.inlineCallbacks
+    def test_run_noChannel(self):
+        """
+        You don't have to provide a channel to run()
+        """
+        # XXX replace this with a better fake
+        runner = MagicMock()
+
+        result = defer.Deferred()
+        runner.runWithSilo.return_value = defer.succeed('hi')
+
+        store = MemoryStore()
+        machine = Machine(
+            store=store,
+            runner=runner)
+
+        # start execution
+        out = yield machine.run('jim', 'foo.sh', args=['hey'],
+            env={'HEY': 'GUYS'})
+        self.assertEqual(out, 'hi')
+
+
     def test_channel_disconnect(self):
         """
         You can disconnect from a channel
         """
-        self.fail('write me')
+        machine = Machine(store=MemoryStore(), runner=MagicMock())
+        chan = machine.channel_open()
+        receiver = MagicMock()
+        machine.channel_connect(chan, receiver)
+        machine.channel_disconnect(chan, receiver)
+        machine.channel_prompt(chan, 'foo?')
+        self.assertEqual(receiver.call_count, 0, "Should not call disconnected"
+            " receiver")
+
 
     def test_channel_closed(self):
         """
         You can't connect to a closed channel.  A notifyClosed on a closed
         channel will fire immediately.
         """
-        self.fail('write me')
-
-
-    def test_run_notExecutable(self):
-        """
-        Only user-executable scripts can be run.
-        """
-        self.fail('write me')
-
-
-    def test_run_noChannel(self):
-        """
-        You don't have to provide a channel to run()
-        """
-        self.fail('write me')
+        machine = Machine(store=MemoryStore(), runner=MagicMock())
+        chan = machine.channel_open()
+        machine.channel_close(chan)
+        self.assertRaises(KeyError, machine.channel_connect, chan, MagicMock())
+        result = machine.channel_notifyClosed(chan)
+        self.assertEqual(self.successResultOf(result), None)
 
 
     def test_channel_connect_withPendingQuestions(self):
         """
         Deliver all pending question to channels when they connect.
         """
-        self.fail('write me')
+        machine = Machine(store=MemoryStore(), runner=MagicMock())
+        chan = machine.channel_open()
+        machine.channel_prompt(chan, 'name?')
+        machine.channel_prompt(chan, 'age?')
+
+        called = []
+        def receiver(question):
+            called.append(question['prompt'])
+            machine.answer_question(question['id'], 'foo')
+        machine.channel_connect(chan, receiver)
+        self.assertEqual(called, ['name?', 'age?'],
+            "Should have asked both questions")
+
+        called = []
+        def receiver2(question):
+            called.append(question)
+        machine.channel_connect(chan, receiver2)
+        self.assertEqual(called, [], "Answered questions should not be"
+            " asked again.")
 
 
     def test_channel_connect_noSuchChannel(self):
         """
         You can't connect to a channel that doesn't exist.
         """
-        self.fail('write me')
+        machine = Machine(store=MemoryStore(), runner=MagicMock())
+        self.assertRaises(KeyError, machine.channel_connect, 'foo', MagicMock())
 
 
+    @defer.inlineCallbacks
     def test_data_put_keyRestrictions(self):
         """
         Data keys may not start with certain characters.
         """
-        self.fail('write me')
+        machine = Machine(None, None)
+        silo_key = machine.control_makeSilo('foo', 'bar')
+        yield self.assertFailure(machine.data_put(silo_key, ':key', 'value'),
+            InvalidKey)
 
 
+    @defer.inlineCallbacks
     def test_data_get_keyRestrictions(self):
         """
         Data keys may not start with certain characters.
         """
-        self.fail('write me')
+        machine = Machine(None, None)
+        silo_key = machine.control_makeSilo('foo', 'bar')
+        yield self.assertFailure(machine.data_get(silo_key, ':key'),
+            InvalidKey)
 
 
+    @defer.inlineCallbacks
     def test_data_closeSilo(self):
         """
         You can't do anything to a closed silo.
         """
-        self.fail('write me')
+        machine = Machine(store=MemoryStore(), runner=None)
+        silo_key = machine.control_makeSilo('foo', 'bar')
+        yield machine.data_put(silo_key, 'foo', 'hi')
+        machine.control_closeSilo(silo_key)
+        yield self.assertFailure(machine.data_get(silo_key, 'foo'), NotFound)
+        yield self.assertFailure(machine.data_put(silo_key, 'a', 'b'), NotFound)
+        yield self.assertFailure(machine.data_createToken(silo_key, 'hey'),
+            NotFound)
 
 
     def test_closeSilo_channelClosed(self):
@@ -194,21 +251,33 @@ class MachineTest(TestCase):
         If the channel is already closed, closing the associated silo should
         not be an error.
         """
-        self.fail('write me')
-
-
-    def test_makeSilo_timeout(self):
-        """
-        Silos should not exist forever.
-        """
-        self.fail('write me')
+        machine = Machine(store=MemoryStore(), runner=None)
+        channel_key = machine.channel_open()
+        silo_key = machine.control_makeSilo('foo', 'bar', channel_key)
+        machine.channel_close(channel_key)
+        machine.control_closeSilo(silo_key)
 
 
     def test_makeSilo_nonExistingChannel(self):
         """
         It is an error to make a silo attached to a channel that doesn't exist.
         """
-        self.fail('write me')
+        machine = Machine(store=MemoryStore(), runner=None)
+        self.assertRaises(KeyError, machine.control_makeSilo, 'a', 'b',
+            'not real channel')
 
+
+    @defer.inlineCallbacks
+    def test_makeSilo_noChannel(self):
+        """
+        It's okay to make a silo without a channel, but prompts won't work.
+        """
+        machine = Machine(store=MemoryStore(), runner=None)
+
+        silo_key = machine.control_makeSilo('jim', 'something')
+
+        # there is no one to ask data of
+        yield self.assertFailure(machine.data_get(silo_key,
+            'something', prompt='Something?'), KeyError)
 
 

@@ -4,6 +4,8 @@
 from twisted.internet import defer, utils
 from twisted.python.filepath import FilePath
 
+from siloscript.error import NotFound
+
 
 
 class SiloWrapper(object):
@@ -49,13 +51,17 @@ class LocalScriptRunner(object):
 
 
     @defer.inlineCallbacks
-    def run(self, executable, args, env):
+    def run(self, executable, args=None, env=None):
         """
         Run a script.
         """
+        args = args or []
+        env = env or {}
         script_fp = self.root
         for segment in executable.split('/'):
             script_fp = script_fp.child(segment)
+        if not script_fp.exists():
+            raise NotFound('Executable not found: %r' % (executable,))
         out, err, exit = yield utils.getProcessOutputAndValue(script_fp.path,
-            args, env=env)
+            args, env=env, path=script_fp.parent().path)
         defer.returnValue((out, err, exit))
