@@ -30,6 +30,82 @@ class MemoryStore(object):
 
 
 
+class SQLiteStore(object):
+    """
+    I store key-value pairs in an sqlite database.
+
+    I provide a SYNCHRONOUS interface, but it's probably fast enough that you
+    won't care.  If you do care about speed, it isn't too hard to make
+    another kind of store.
+    """
+
+    def __init__(self, filename):
+        """
+        @param filename: SQLite filename (or C{':memory:'}).
+        """
+        from pysqlite2 import dbapi2 as sqlite
+        self.conn = sqlite.connect(filename)
+
+
+    @classmethod
+    def create(cls, filename):
+        inst = SQLiteStore(filename)
+        inst.conn.execute('''
+            CREATE TABLE IF NOT EXISTS silo_kv_data (
+                created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                user BLOB,
+                silo BLOB,
+                key BLOB,
+                value BLOB
+            );
+        ''')
+        inst.conn.execute('''
+            CREATE UNIQUE INDEX IF NOT EXISTS silo_kv_data_uidx
+                ON silo_kv_data(user, silo, key);
+        ''')
+        inst.conn.commit()
+        return inst
+
+
+    @async
+    def put(self, user, silo, key, value):
+        self.conn.execute('''
+            INSERT OR REPLACE INTO silo_kv_data (user, silo, key, value)
+            VALUES (?, ?, ?, ?)
+        ''', (user, silo, key, value))
+        self.conn.commit()
+
+
+    @async
+    def get(self, user, silo, key):
+        r = self.conn.execute('''
+            SELECT value FROM silo_kv_data
+            WHERE
+                user=?
+                AND silo=?
+                AND key=?
+        ''', (user, silo, key))
+        row = r.fetchone()
+        if row is None:
+            raise KeyError((user, silo, key))
+        return row[0]
+
+
+    @async
+    def delete(self, user, silo, key):
+        r = self.conn.execute('''
+            DELETE FROM silo_kv_data
+            WHERE
+                user=?
+                AND silo=?
+                AND key=?
+        ''', (user, silo, key))
+        self.conn.commit()
+        if not r.rowcount:
+            raise KeyError((user, silo, key))
+
+
+
 class gnupgWrapper(object):
     """
     I wrap a key-value store with encryption.

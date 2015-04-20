@@ -22,6 +22,18 @@ Install the latest stable version from GitHub:
 
 ## Example ##
 
+
+### Command line ###
+
+You can run silo scripts interactively with `siloscript run`:
+
+    siloscript run siloscript/data/scripts/testscript/foo
+
+See `--help` for more info.
+
+
+### Web ###
+
 There's a sample web interface you can run.  Install dependencies then run the server:
 
     siloscript serve
@@ -31,6 +43,8 @@ Then open your browser to http://127.0.0.1:7600/static/debug.html
 Click the "Run" button and it will run the `scripts/testscript/foo` script in this repo, which asks for an account number.  Enter something.  It will echo it back as a result.
 
 If you click "Run" again, it will not ask you for the information again, because it is cached.
+
+
 
 
 
