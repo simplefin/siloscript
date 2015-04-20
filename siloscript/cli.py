@@ -3,15 +3,17 @@
 import argparse
 import sys
 import getpass
+import gnupg
 
 from twisted.python.filepath import FilePath
 from twisted.internet import endpoints, task, defer
 from twisted.web.server import Site
 from twisted.python import log
+from twisted.python.procutils import which
 
 from siloscript.server import PublicWebApp, ControlWebApp, DataWebApp
 from siloscript.server import Machine
-from siloscript.storage import MemoryStore, SQLiteStore
+from siloscript.storage import MemoryStore, SQLiteStore, gnupgWrapper
 from siloscript.process import SiloWrapper, LocalScriptRunner
 
 root = FilePath(__file__).parent()
@@ -28,7 +30,13 @@ def getStore(args):
     else:
         # in-memory
         store = MemoryStore()
-    return store
+
+    # layer on the encryption
+    gpg = gnupg.GPG(
+        homedir=args.gpg_home,
+        binary=which('gpg')[0])
+    return gnupgWrapper(gpg, store)
+
 
 
 parser = argparse.ArgumentParser()
@@ -37,6 +45,9 @@ parser.add_argument('--sqlite',
     default=None,
     help='If given, then use SQLite as the storage mechanism.  This arg is '
          'the filename to store things in.')
+parser.add_argument('--gpg-home', '-G',
+    default='.gpghome',
+    help='The directory where gpg keys live')
 
 
 subparsers = parser.add_subparsers(help='sub-command help')

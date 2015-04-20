@@ -5,3 +5,5 @@
 
 clean:
 	-find siloscript -name "*.pyc" -exec rm {} \;
+	-rm *.sqlite
+	-rm -r .gpghome
