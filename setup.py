@@ -29,6 +29,8 @@ setup(
     packages=find_packages(),
     install_requires=[
         'klein>=15.0.0',
+        'gnupg',
+        'pysqlite',
     ],
     scripts=[
         'bin/siloscript',
