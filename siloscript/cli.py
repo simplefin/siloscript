@@ -2,6 +2,7 @@
 # See LICENSE for details.
 import argparse
 import sys
+import os
 import getpass
 import gnupg
 
@@ -142,7 +143,7 @@ def run(reactor, args):
     # run the script
     script_name = FilePath(args.script).basename()
     out, err, rc = yield machine.run(args.user, script_name,
-        args.args, {}, chan)
+        args.args, os.environ.copy(), chan)
 
     out_fd = sys.stdout
     if args.output != '-':
