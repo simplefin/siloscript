@@ -26,7 +26,7 @@ There's a sample web interface you can run.  Install dependencies then run the s
 
     siloscript serve
 
-Then open your browser to http://127.0.0.1:9600/static/debug.html
+Then open your browser to http://127.0.0.1:7600/static/debug.html
 
 Click the "Run" button and it will run the `scripts/testscript/foo` script in this repo, which asks for an account number.  Enter something.  It will echo it back as a result.
 

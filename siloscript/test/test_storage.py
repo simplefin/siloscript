@@ -3,6 +3,7 @@
 
 from twisted.trial.unittest import TestCase
 from twisted.internet import defer
+from twisted.python.procutils import which
 
 import gnupg
 
@@ -86,12 +87,17 @@ class MemoryStoreTest(TestCase, StoreMixin):
 
 
 
+gpg_bin = which('gpg')[0]
+
+
+
 class gnupgWrapperTest(TestCase, StoreMixin):
 
 
     def getEmptyStore(self):
         tmpdir = self.mktemp()
-        gpg = gnupg.GPG(homedir=tmpdir)
+        gpg = gnupg.GPG(homedir=tmpdir,
+            binary=gpg_bin)
         return gnupgWrapper(gpg, MemoryStore())
 
 
@@ -100,7 +106,8 @@ class gnupgWrapperTest_with_passphrase(TestCase, StoreMixin):
 
     def getEmptyStore(self):
         tmpdir = self.mktemp()
-        gpg = gnupg.GPG(homedir=tmpdir)
+        gpg = gnupg.GPG(homedir=tmpdir,
+            binary=gpg_bin)
         return gnupgWrapper(gpg, MemoryStore(), passphrase='foo')
 
 

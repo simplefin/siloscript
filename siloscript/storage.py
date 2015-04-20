@@ -4,13 +4,8 @@
 from twisted.internet import defer, threads
 from twisted.python import log
 
-from functools import wraps
+from siloscript.util import async
 
-def async(f):
-    @wraps(f)
-    def deco(*args, **kwargs):
-        return defer.maybeDeferred(f, *args, **kwargs)
-    return deco
 
 
 class MemoryStore(object):
