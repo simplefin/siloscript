@@ -167,7 +167,7 @@ run_parser.add_argument('script',
     help='Script to run')
 run_parser.add_argument('args',
     metavar='ARG',
-    nargs='*',
+    nargs=argparse.REMAINDER,
     help='Extra args to pass to script')
 run_parser.set_defaults(func=run)
 
