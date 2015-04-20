@@ -11,14 +11,34 @@ from twisted.python import log
 
 from siloscript.server import PublicWebApp, ControlWebApp, DataWebApp
 from siloscript.server import Machine
-from siloscript.storage import MemoryStore
+from siloscript.storage import MemoryStore, SQLiteStore
 from siloscript.process import SiloWrapper, LocalScriptRunner
 
 root = FilePath(__file__).parent()
 
 
+def getStore(args):
+    """
+    Get the right data store for the given command line args.
+    """
+    store = None
+    if args.sqlite:
+        # sqlite
+        store = SQLiteStore.create(args.sqlite)
+    else:
+        # in-memory
+        store = MemoryStore()
+    return store
+
 
 parser = argparse.ArgumentParser()
+
+parser.add_argument('--sqlite',
+    default=None,
+    help='If given, then use SQLite as the storage mechanism.  This arg is '
+         'the filename to store things in.')
+
+
 subparsers = parser.add_subparsers(help='sub-command help')
 
 
@@ -27,7 +47,7 @@ def serve(reactor, args):
     Start webserver
     """
     log.startLogging(sys.stdout)
-    store = MemoryStore()
+    store = getStore(args)
     runner = SiloWrapper(args.data_url, LocalScriptRunner(args.scripts))
     machine = Machine(store, runner)
 
@@ -78,6 +98,7 @@ server_parser.add_argument('--scripts', '-s',
 server_parser.add_argument('--static-root', '-S',
     default=root.child('data').child('static').path,
     help='Path to static files served at /static.  (default: %(default)s)')
+
 server_parser.set_defaults(func=serve)
 
 
@@ -89,7 +110,7 @@ def run(reactor, args):
     """
     script_root = FilePath(args.script).parent()
 
-    store = MemoryStore()
+    store = getStore(args)
     runner = SiloWrapper('unknown', LocalScriptRunner(script_root.path))
     machine = Machine(store, runner)
 

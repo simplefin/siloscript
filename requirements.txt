@@ -4,3 +4,4 @@ Werkzeug==0.10.4
 zope.interface==4.1.2
 gnupg==2.0.2
 psutil==2.2.1
+pysqlite==2.6.3

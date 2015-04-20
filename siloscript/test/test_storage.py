@@ -7,7 +7,7 @@ from twisted.python.procutils import which
 
 import gnupg
 
-from siloscript.storage import Silo, MemoryStore, gnupgWrapper
+from siloscript.storage import Silo, MemoryStore, gnupgWrapper, SQLiteStore
 
 
 class StoreMixin(object):
@@ -26,6 +26,17 @@ class StoreMixin(object):
         yield store.put('jim', 'silo1', 'foo', 'FOO')
         val = yield store.get('jim', 'silo1', 'foo')
         self.assertEqual(val, 'FOO')
+
+
+    @defer.inlineCallbacks
+    def test_binary(self):
+        """
+        Binary data should be okay.
+        """
+        store = yield self.getEmptyStore()
+        yield store.put('a', 'b', 'c', '\x00\x01')
+        val = yield store.get('a', 'b', 'c')
+        self.assertEqual(val, '\x00\x01')
 
     
     @defer.inlineCallbacks
@@ -84,6 +95,14 @@ class MemoryStoreTest(TestCase, StoreMixin):
 
     def getEmptyStore(self):
         return MemoryStore()
+
+
+
+class SQLiteStoreTest(TestCase, StoreMixin):
+
+
+    def getEmptyStore(self):
+        return SQLiteStore.create(':memory:')
 
 
 
