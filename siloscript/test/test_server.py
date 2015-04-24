@@ -232,6 +232,19 @@ class MachineTest(TestCase):
 
 
     @defer.inlineCallbacks
+    def test_createToken_unique(self):
+        """
+        When creating a token, it should be unique.
+        """
+        machine = Machine(MemoryStore(), None)
+        silo_key = machine.control_makeSilo('foo', 'bar')
+        t1 = yield machine.data_createToken(silo_key, 'foo')
+        t2 = yield machine.data_createToken(silo_key, 'bar')
+        self.assertNotEqual(t1, t2, "Should make different tokens"
+            " for different values")
+
+
+    @defer.inlineCallbacks
     def test_data_closeSilo(self):
         """
         You can't do anything to a closed silo.

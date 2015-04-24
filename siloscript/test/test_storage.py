@@ -158,6 +158,18 @@ class SiloTest(TestCase):
 
 
     @defer.inlineCallbacks
+    def test_noUser_prompt(self):
+        """
+        If the value is not set, and there's no user, it should
+        be a KeyError even if you prompt.
+        """
+        store = MemoryStore()
+        silo = Silo(store, 'user', 'africa')
+        yield self.assertFailure(silo.get('hey', prompt='Hey?'),
+            KeyError)
+
+
+    @defer.inlineCallbacks
     def test_user_basic(self):
         """
         A silo with a user can ask the user for more information.

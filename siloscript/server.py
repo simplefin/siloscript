@@ -59,7 +59,8 @@ class Machine(object):
 
         @param channel_key: A channel key as returned by L{channel_open}.
         @param receiver: A function that will be called with a single argument:
-            a dictionary with an C{'id'} and C{'prompt'}.
+            a dictionary with an C{'id'} and C{'prompt'}.  The function should
+            call L{answer_question} to provide the answer.
         """
         if channel_key not in self.channels:
             raise KeyError("No such channel")
@@ -398,11 +399,13 @@ class DataWebApp(object):
 
 
     @app.route('/<string:silo_key>/<string:key>', methods=['PUT'])
+    @defer.inlineCallbacks
     def data_PUT(self, request, silo_key, key):
         value = request.content.read()
         try:
-            return self.machine.data_put(silo_key, key, value)
-        except KeyError:
+            value = yield self.machine.data_put(silo_key, key, value)
+            defer.returnValue(value)
+        except (KeyError, NotFound):
             request.setResponseCode(404)
 
 
@@ -413,7 +416,7 @@ class DataWebApp(object):
         try:
             value = yield self.machine.data_createToken(silo_key, value)
             defer.returnValue(value)
-        except KeyError:
+        except (KeyError, NotFound):
             request.setResponseCode(404)
 
 
