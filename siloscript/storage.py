@@ -226,17 +226,10 @@ class Silo(object):
         if options:
             question['options'] = options
         d = defer.maybeDeferred(self.prompt_func, question)
-        if options:
-            d.addCallback(self._assertGoodOption, options)
         if save:
             d.addCallback(self._save, key)
         return d
 
-
-    def _assertGoodOption(self, answer, options):
-        if answer not in options:
-            raise ValueError('Invalid answer', answer)
-        return answer
 
     def _save(self, value, key):
         d = self.put(key, value)

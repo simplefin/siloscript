@@ -253,6 +253,25 @@ class MachineTest(TestCase):
 
 
     @defer.inlineCallbacks
+    def test_data_get_options(self):
+        """
+        You can provide options.
+        """
+        store = MemoryStore()
+        machine = Machine(store, None)
+        channel_key = machine.channel_open()
+        def receiver(question):
+            self.assertEqual(question['options'], ['1','2','3'])
+            machine.answer_question(question['id'], 'answer')
+        machine.channel_connect(channel_key, receiver)
+
+        silo_key = machine.control_makeSilo('foo', 'bar', channel_key)
+        value = yield machine.data_get(silo_key,
+            'name', prompt='Name?', options=['1','2','3'])
+        self.assertEqual(value, 'answer')
+
+
+    @defer.inlineCallbacks
     def test_createToken_unique(self):
         """
         When creating a token, it should be unique.

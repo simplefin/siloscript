@@ -253,18 +253,3 @@ class SiloTest(TestCase):
         self.assertEqual(called[0]['options'], ['option1', 'option2'])
         self.assertEqual(called[0]['prompt'], 'name?')
 
-
-    @defer.inlineCallbacks
-    def test_get_options_invalid(self):
-        """
-        You can't return an options not provided.
-        """
-        store = MemoryStore()
-        called = []
-        def ask(question):
-            called.append(question)
-            return 'not an option'
-        silo = Silo(store, 'jim', 'africa', ask)
-        yield self.assertFailure(silo.get('name', prompt='name?', options=[
-            'option1', 'option2']), ValueError)
-

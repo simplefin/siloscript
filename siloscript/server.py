@@ -122,9 +122,10 @@ class Machine(object):
             'data': {
                 'id': question_id,
                 'prompt': question['prompt'],
-                #'options': question['options'],
             },
         }
+        if 'options' in question:
+            q['data']['options'] = question['options']
         self.pending_questions_by_id[question_id] = q
         self.pending_questions_by_channel[channel_key].append(q)
 
@@ -225,7 +226,7 @@ class Machine(object):
 
 
     @async
-    def data_get(self, silo_key, key, prompt=None, save=True):
+    def data_get(self, silo_key, key, prompt=None, save=True, options=None):
         """
         Get data from a user-scoped silo.
 
@@ -235,13 +236,15 @@ class Machine(object):
             prompt a user for the value in case it's no in the datastore
             already.
         @param save: If C{False}, only prompt and don't save the response.
+        @param options: List of possible values.  Not enforced.
 
         @return: The L{Deferred} value (either cached or from the user).
         """
         if silo_key not in self.silos:
             raise NotFound(silo_key)
         self._data_validateUserSuppliedKey(key)
-        return self.silos[silo_key].get(key, prompt, save)
+        return self.silos[silo_key].get(key, prompt, save=save,
+            options=options)
 
 
     @async
@@ -394,9 +397,10 @@ class DataWebApp(object):
     def data_GET(self, request, silo_key, key):
         prompt = request.args.get('prompt', [None])[0]
         save = request.args.get('save', ['True'])[0] == 'True'
+        options = request.args.get('options', None)
         try:
             value = yield self.machine.data_get(silo_key, key, prompt,
-                save=save)
+                save=save, options=options)
             defer.returnValue(value)
         except KeyError:
             request.setResponseCode(404)
