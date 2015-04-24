@@ -232,6 +232,27 @@ class MachineTest(TestCase):
 
 
     @defer.inlineCallbacks
+    def test_data_get_no_save(self):
+        """
+        You can get data from a user but not save the data.
+        """
+        store = MemoryStore()
+        machine = Machine(store, None)
+        channel_key = machine.channel_open()
+        def receiver(question):
+            machine.answer_question(question['id'], 'answer')
+        machine.channel_connect(channel_key, receiver)
+
+        silo_key = machine.control_makeSilo('foo', 'bar', channel_key)
+        value = yield machine.data_get(silo_key,
+            'name', prompt='Name?', save=False)
+        self.assertEqual(value, 'answer')
+
+        yield self.assertFailure(machine.data_get(silo_key, 'name'),
+            KeyError)
+
+
+    @defer.inlineCallbacks
     def test_createToken_unique(self):
         """
         When creating a token, it should be unique.

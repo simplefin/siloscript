@@ -24,7 +24,8 @@ class Functional_ClientTest(TestCase):
         answers = answers or {}
 
         # start a server
-        machine = Machine(MemoryStore(), None)
+        self.store = MemoryStore()
+        machine = Machine(self.store, None)
         data_app = DataWebApp(machine)
         ep = endpoints.serverFromString(reactor, 'tcp:0:interface=127.0.0.1')
         p = yield ep.listen(Site(data_app.app.resource()))
@@ -63,6 +64,27 @@ class Functional_ClientTest(TestCase):
             'account_id',
             prompt='Account ID?')
         self.assertEqual(result, '12345')
+
+
+    @defer.inlineCallbacks
+    def test_getValue_prompt_noSave(self):
+        """
+        You can get a value and not save it.
+        """
+        url = yield self.startServer(answers={
+            'Account ID?': '12345',
+        })
+
+        # make client
+        client = Client(url)
+        result = yield threads.deferToThread(client.getValue,
+            'account_id',
+            prompt='Account ID?',
+            save=False)
+        self.assertEqual(result, '12345')
+
+        yield self.assertFailure(threads.deferToThread(client.getValue,
+            'account_id'), NotFound)
 
 
     @defer.inlineCallbacks
