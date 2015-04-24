@@ -185,8 +185,11 @@ class Silo(object):
             See L{MemoryStore}
         @param user: A string user identifier.
         @param silo: A string silo identifier.
-        @param prompt_func: A function that will be called with prompts when
-            data is not available in the store.
+        @param prompt_func: A function that will be called with questions when
+            data is not available in the store.  A question is a dict with
+            at least a C{'prompt'} key with a human-readable string to give
+            a user.  It may also contain a C{'options'} key with a list of
+            possible options.
         """
         self.store = store
         self.user = user
@@ -194,13 +197,15 @@ class Silo(object):
         self.prompt_func = prompt_func
 
 
-    def get(self, key, prompt=None, save=True):
+    def get(self, key, prompt=None, save=True, options=None):
         """
         Get a value from the silo.
 
         @param key: Data key
         @param prompt: If given, a human-readable string to present
             to a human to get the answer (if it's not in the store).
+        @param options: If you want to restrict the answers to one of a set
+            of options, this can be provided as a list of string options.
         """
         if not save and not prompt:
             return defer.fail(
@@ -209,19 +214,29 @@ class Silo(object):
 
         d = self.store.get(self.user, self.silo, key)
         if self.prompt_func and prompt:
-            d.addErrback(self._promptAndSave, key, prompt, save)
+            d.addErrback(self._promptAndSave, key, prompt, save, options)
         return d
 
 
-    def _promptAndSave(self, err, key, prompt, save):
+    def _promptAndSave(self, err, key, prompt, save, options):
         """
         Prompt the user for the value and save it if desired.
         """
-        d = defer.maybeDeferred(self.prompt_func, prompt)
+        question = {'prompt': prompt}
+        if options:
+            question['options'] = options
+        d = defer.maybeDeferred(self.prompt_func, question)
+        if options:
+            d.addCallback(self._assertGoodOption, options)
         if save:
             d.addCallback(self._save, key)
         return d
 
+
+    def _assertGoodOption(self, answer, options):
+        if answer not in options:
+            raise ValueError('Invalid answer', answer)
+        return answer
 
     def _save(self, value, key):
         d = self.put(key, value)

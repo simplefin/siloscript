@@ -158,7 +158,7 @@ class MachineTest(TestCase):
         receiver = MagicMock()
         machine.channel_connect(chan, receiver)
         machine.channel_disconnect(chan, receiver)
-        machine.channel_prompt(chan, 'foo?')
+        machine.channel_prompt(chan, {'prompt': 'foo?'})
         self.assertEqual(receiver.call_count, 0, "Should not call disconnected"
             " receiver")
 
@@ -182,8 +182,8 @@ class MachineTest(TestCase):
         """
         machine = Machine(store=MemoryStore(), runner=MagicMock())
         chan = machine.channel_open()
-        machine.channel_prompt(chan, 'name?')
-        machine.channel_prompt(chan, 'age?')
+        machine.channel_prompt(chan, {'prompt': 'name?'})
+        machine.channel_prompt(chan, {'prompt': 'age?'})
 
         called = []
         def receiver(question):

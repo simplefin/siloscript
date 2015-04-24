@@ -102,13 +102,13 @@ class Machine(object):
             d.callback(channel_key)
 
 
-    def channel_prompt(self, channel_key, prompt):
+    def channel_prompt(self, channel_key, question):
         """
         Ask a question of a channel.
 
         @param channel_key: A channel key as returned by L{channel_open}.
-        @param prompt: A string, human-friendly form of the question you want
-            answered.
+        @param question: A dict question with at least a C{'prompt'}
+            string and possibly some C{'options'}.
 
         @return: A L{Deferred} which will fire with the answer if one is
             given.
@@ -116,19 +116,20 @@ class Machine(object):
         question_id = 'Q-%s' % (uuid4(),)
         
         answer_d = defer.Deferred()
-        question = {
+        q = {
             'channel_key': channel_key,
             'd': answer_d,
             'data': {
                 'id': question_id,
-                'prompt': prompt,
+                'prompt': question['prompt'],
+                #'options': question['options'],
             },
         }
-        self.pending_questions_by_id[question_id] = question
-        self.pending_questions_by_channel[channel_key].append(question)
+        self.pending_questions_by_id[question_id] = q
+        self.pending_questions_by_channel[channel_key].append(q)
 
         for receiver in self.receivers[channel_key]:
-            receiver(question['data'])
+            receiver(q['data'])
 
         return answer_d
 
