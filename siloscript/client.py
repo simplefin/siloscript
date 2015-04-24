@@ -17,9 +17,14 @@ class Client(object):
         self.url = data_url
 
 
-    def getValue(self, key, prompt=None):
+    def getValue(self, key, prompt=None, save=True):
         """
         Get a value from the data store.
+
+        @param key: Identifier for the value you want.
+        @param prompt: Human-readable version of prompt if wanted.
+        @param save: Whether or not to save the value in the database.
+            You must provide a C{prompt} if this is C{False}.
 
         @raise NotFound: If there is no such value and a user is not there to
             supply it.
@@ -27,6 +32,8 @@ class Client(object):
         params = {}
         if prompt:
             params['prompt'] = prompt
+        if save is False:
+            params['save'] = 'False'
         r = requests.get('%s/%s' % (self.url, key), params=params)
         if r.status_code == 200:
             return r.text

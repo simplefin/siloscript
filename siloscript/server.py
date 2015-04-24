@@ -224,7 +224,7 @@ class Machine(object):
 
 
     @async
-    def data_get(self, silo_key, key, prompt=None):
+    def data_get(self, silo_key, key, prompt=None, save=True):
         """
         Get data from a user-scoped silo.
 
@@ -233,13 +233,14 @@ class Machine(object):
         @param prompt: If given, this is a human-friendly string to be used to
             prompt a user for the value in case it's no in the datastore
             already.
+        @param save: If C{False}, only prompt and don't save the response.
 
         @return: The L{Deferred} value (either cached or from the user).
         """
         if silo_key not in self.silos:
             raise NotFound(silo_key)
         self._data_validateUserSuppliedKey(key)
-        return self.silos[silo_key].get(key, prompt)
+        return self.silos[silo_key].get(key, prompt, save)
 
 
     @async
@@ -391,8 +392,10 @@ class DataWebApp(object):
     @defer.inlineCallbacks
     def data_GET(self, request, silo_key, key):
         prompt = request.args.get('prompt', [None])[0]
+        save = request.args.get('save', ['True'])[0] == 'True'
         try:
-            value = yield self.machine.data_get(silo_key, key, prompt)
+            value = yield self.machine.data_get(silo_key, key, prompt,
+                save=save)
             defer.returnValue(value)
         except KeyError:
             request.setResponseCode(404)

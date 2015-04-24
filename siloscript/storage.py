@@ -194,22 +194,32 @@ class Silo(object):
         self.prompt_func = prompt_func
 
 
-    def get(self, key, prompt=None):
+    def get(self, key, prompt=None, save=True):
         """
         Get a value from the silo.
+
+        @param key: Data key
+        @param prompt: If given, a human-readable string to present
+            to a human to get the answer (if it's not in the store).
         """
+        if not save and not prompt:
+            return defer.fail(
+                TypeError("You must prompt if you're not going to save"
+                          " for key: %r" % (key,)))
+
         d = self.store.get(self.user, self.silo, key)
         if self.prompt_func and prompt:
-            d.addErrback(self._promptAndSave, key, prompt)
+            d.addErrback(self._promptAndSave, key, prompt, save)
         return d
 
 
-    def _promptAndSave(self, err, key, prompt):
+    def _promptAndSave(self, err, key, prompt, save):
         """
-        Prompt the user for the value.
+        Prompt the user for the value and save it if desired.
         """
         d = defer.maybeDeferred(self.prompt_func, prompt)
-        d.addCallback(self._save, key)
+        if save:
+            d.addCallback(self._save, key)
         return d
 
 

@@ -208,3 +208,30 @@ class SiloTest(TestCase):
         silo = Silo(store, 'jim', 'africa', ask)
 
         yield self.assertFailure(silo.get('name'), KeyError)
+
+
+    @defer.inlineCallbacks
+    def test_get_no_save(self):
+        """
+        You can get data and not save it.
+        """
+        store = MemoryStore()
+        called = []
+        def ask(prompt):
+            called.append(prompt)
+            return 'answer'
+        silo = Silo(store, 'jim', 'africa', ask)
+        result = yield silo.get('name', prompt='name?', save=False)
+        self.assertEqual(result, 'answer')
+        yield self.assertFailure(store.get('jim', 'africa', 'name'),
+            KeyError)
+
+
+    @defer.inlineCallbacks
+    def test_get_no_save_no_prompt(self):
+        """
+        If you don't want to save the data, you must provide a prompt.
+        """
+        silo = Silo(None, 'jim', 'africa')
+        yield self.assertFailure(silo.get('foo', save=False), TypeError)
+
