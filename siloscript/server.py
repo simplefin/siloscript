@@ -277,16 +277,21 @@ class Machine(object):
         if silo_key not in self.silos:
             raise NotFound(silo_key)
         silo = self.silos[silo_key]
-        h = hashlib.sha1(value + self.token_salt).hexdigest()
-        key = self.token_prefix + h
+        key = ':tokens'
         try:
-            opaque = yield silo.get(key)
+            data = yield silo.get(key)
+            current_tokens = json.loads(data)
         except KeyError:
-            opaque = 'TK-%s' % (uuid4(),)
-            yield silo.put(key, opaque)
-        defer.returnValue(opaque)
+            current_tokens = {}
 
+        h = hashlib.sha1(value + self.token_salt).hexdigest()
+        if h in current_tokens:
+            defer.returnValue(current_tokens[h])
 
+        token = 'TK-%s' % (uuid4(),)
+        current_tokens[h] = token
+        yield silo.put(key, json.dumps(current_tokens))
+        defer.returnValue(token)
 
 
 
