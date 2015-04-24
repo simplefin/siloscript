@@ -176,8 +176,8 @@ class SiloTest(TestCase):
         """
         store = MemoryStore()
         called = []
-        def ask(prompt):
-            called.append(prompt)
+        def ask(question):
+            called.append(question['prompt'])
             return 'answer'
         silo = Silo(store, 'jim', 'africa', ask)
 
@@ -202,8 +202,8 @@ class SiloTest(TestCase):
         """
         store = MemoryStore()
         called = []
-        def ask(prompt):
-            called.append(prompt)
+        def ask(question):
+            called.append(question['prompt'])
             return 'answer'
         silo = Silo(store, 'jim', 'africa', ask)
 
@@ -217,8 +217,8 @@ class SiloTest(TestCase):
         """
         store = MemoryStore()
         called = []
-        def ask(prompt):
-            called.append(prompt)
+        def ask(question):
+            called.append(question['prompt'])
             return 'answer'
         silo = Silo(store, 'jim', 'africa', ask)
         result = yield silo.get('name', prompt='name?', save=False)
@@ -234,4 +234,22 @@ class SiloTest(TestCase):
         """
         silo = Silo(None, 'jim', 'africa')
         yield self.assertFailure(silo.get('foo', save=False), TypeError)
+
+
+    @defer.inlineCallbacks
+    def test_get_prompt_options(self):
+        """
+        You can provide a set of options for the prompt.
+        """
+        store = MemoryStore()
+        called = []
+        def ask(question):
+            called.append(question)
+            return 'option1'
+        silo = Silo(store, 'jim', 'africa', ask)
+        result = yield silo.get('name', prompt='name?', options=[
+            'option1', 'option2'])
+        self.assertEqual(result, 'option1')
+        self.assertEqual(called[0]['options'], ['option1', 'option2'])
+        self.assertEqual(called[0]['prompt'], 'name?')
 

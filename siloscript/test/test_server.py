@@ -158,7 +158,7 @@ class MachineTest(TestCase):
         receiver = MagicMock()
         machine.channel_connect(chan, receiver)
         machine.channel_disconnect(chan, receiver)
-        machine.channel_prompt(chan, 'foo?')
+        machine.channel_prompt(chan, {'prompt': 'foo?'})
         self.assertEqual(receiver.call_count, 0, "Should not call disconnected"
             " receiver")
 
@@ -182,8 +182,8 @@ class MachineTest(TestCase):
         """
         machine = Machine(store=MemoryStore(), runner=MagicMock())
         chan = machine.channel_open()
-        machine.channel_prompt(chan, 'name?')
-        machine.channel_prompt(chan, 'age?')
+        machine.channel_prompt(chan, {'prompt': 'name?'})
+        machine.channel_prompt(chan, {'prompt': 'age?'})
 
         called = []
         def receiver(question):
@@ -250,6 +250,25 @@ class MachineTest(TestCase):
 
         yield self.assertFailure(machine.data_get(silo_key, 'name'),
             KeyError)
+
+
+    @defer.inlineCallbacks
+    def test_data_get_options(self):
+        """
+        You can provide options.
+        """
+        store = MemoryStore()
+        machine = Machine(store, None)
+        channel_key = machine.channel_open()
+        def receiver(question):
+            self.assertEqual(question['options'], ['1','2','3'])
+            machine.answer_question(question['id'], 'answer')
+        machine.channel_connect(channel_key, receiver)
+
+        silo_key = machine.control_makeSilo('foo', 'bar', channel_key)
+        value = yield machine.data_get(silo_key,
+            'name', prompt='Name?', options=['1','2','3'])
+        self.assertEqual(value, 'answer')
 
 
     @defer.inlineCallbacks

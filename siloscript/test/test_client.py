@@ -114,6 +114,44 @@ class Functional_ClientTest(TestCase):
 
 
     @defer.inlineCallbacks
+    def test_getValue_options(self):
+        """
+        You can provide a list of acceptable options.
+        """
+        url = yield self.startServer(answers={
+            'Color?': 'yellow',
+        })
+
+        # make client
+        client = Client(url)
+        result = yield threads.deferToThread(client.getValue,
+            'color',
+            prompt='Color?',
+            options=['yellow', 'orange', 'blue'])
+        self.assertEqual(result, 'yellow')
+
+
+    @defer.inlineCallbacks
+    def test_getValue_options_nonOptionOkay(self):
+        """
+        You might get back an answer that wasn't one of the options.  You
+        should check this on your own if you care.
+        """
+        url = yield self.startServer(answers={
+            'Color?': 'purple',
+        })
+
+        # make client
+        client = Client(url)
+        result = yield threads.deferToThread(client.getValue,
+            'color',
+            prompt='Color?',
+            options=['yellow', 'orange', 'blue'])
+        self.assertEqual(result, 'purple', "Even though it wasn't an option"
+            " it can be returned.")
+
+
+    @defer.inlineCallbacks
     def test_putValue(self):
         """
         You can save values.
