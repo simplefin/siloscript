@@ -5,9 +5,12 @@ from twisted.trial.unittest import TestCase
 from twisted.internet import defer
 from twisted.python.procutils import which
 
+from mock import MagicMock
+
 import gnupg
 
 from siloscript.storage import Silo, MemoryStore, gnupgWrapper, SQLiteStore
+from siloscript.error import CryptError
 
 
 class StoreMixin(object):
@@ -128,6 +131,32 @@ class gnupgWrapperTest_with_passphrase(TestCase, StoreMixin):
         gpg = gnupg.GPG(homedir=tmpdir,
             binary=gpg_bin)
         return gnupgWrapper(gpg, MemoryStore(), passphrase='foo')
+
+
+    @defer.inlineCallbacks
+    def test_wrongPassphrase(self):
+        """
+        If you enter the wrong passphrase, you will get exceptions when
+        decrypting.
+        """
+        tmpdir = self.mktemp()
+
+        mem_store = MemoryStore()
+
+        gpg1 = gnupg.GPG(homedir=tmpdir,
+            binary=gpg_bin)
+        store1 = gnupgWrapper(gpg1, mem_store, passphrase='foo')
+
+        gpg2 = gnupg.GPG(homedir=tmpdir,
+            binary=gpg_bin)
+        store2 = gnupgWrapper(gpg2, mem_store, passphrase='not foo')
+
+        yield store1.put('user', 'silo', 'key', 'value')
+        yield self.assertFailure(store2.get('user', 'silo', 'key'), CryptError)
+        yield store2.put('user', 'silo', 'key2', 'val')
+        val = yield store1.get('user', 'silo', 'key2')
+        self.assertEqual(val, 'val')
+
 
 
 class SiloTest(TestCase):
@@ -252,4 +281,20 @@ class SiloTest(TestCase):
         self.assertEqual(result, 'option1')
         self.assertEqual(called[0]['options'], ['option1', 'option2'])
         self.assertEqual(called[0]['prompt'], 'name?')
+
+
+    @defer.inlineCallbacks
+    def test_get_CryptError(self):
+        """
+        If there's a CryptError when getting, raise the error.
+        """
+        store = MemoryStore()
+        store.get = MagicMock()
+        store.get.return_value = defer.fail(CryptError())
+        
+        def ask(question):
+            return 'hi'
+
+        silo = Silo(store, 'jim', 'africa', ask)
+        yield self.assertFailure(silo.get('name', prompt='name?'), CryptError)
 

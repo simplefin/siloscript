@@ -5,6 +5,7 @@ from twisted.internet import defer, threads
 from twisted.python import log
 
 from siloscript.util import async
+from siloscript.error import CryptError
 
 
 
@@ -156,6 +157,8 @@ class gnupgWrapper(object):
         crypto_key = yield self._getKey()
         cipher = yield threads.deferToThread(self._gpg.encrypt,
             value, crypto_key['keyid'], passphrase=self._passphrase)
+        if not cipher.ok:
+            raise CryptError('Could not encrypt', cipher.status, cipher.stderr)
         result = yield self._store.put(user, silo, key, str(cipher))
         defer.returnValue(result)
 
@@ -166,6 +169,8 @@ class gnupgWrapper(object):
         yield self._getKey()
         plain = yield threads.deferToThread(self._gpg.decrypt, cipher,
             passphrase=self._passphrase)
+        if not plain.ok:
+            raise CryptError('Could not decrypt', plain.status, plain.stderr)
         defer.returnValue(str(plain))
 
 
@@ -222,6 +227,8 @@ class Silo(object):
         """
         Prompt the user for the value and save it if desired.
         """
+        err.trap(KeyError)
+        
         question = {'prompt': prompt}
         if options:
             question['options'] = options

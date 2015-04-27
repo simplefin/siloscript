@@ -129,11 +129,15 @@ class LocalScriptRunner(object):
         if not script_fp.exists():
             raise NotFound('Executable not found: %r' % (executable,))
 
+        executable = script_fp.path
+        args = [executable] + args
+        path = script_fp.parent().path
+
         proto = _ProcessProtocol(logger=logger)
         reactor.spawnProcess(proto, executable,
-            [executable] + args,
+            args,
             env=env,
-            path=script_fp.parent().path)
+            path=path)
         rc = yield proto._done
         defer.returnValue((proto.stdout(), proto.stderr(), rc))
 
