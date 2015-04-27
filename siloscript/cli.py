@@ -121,6 +121,8 @@ def run(reactor, args):
     """
     Run a single command
     """
+    if args.verbose:
+        log.startLogging(sys.stderr)
     script_root = FilePath(args.script).parent()
 
     store = getStore(args)
@@ -142,7 +144,7 @@ def run(reactor, args):
     machine.channel_connect(chan, receiver)
 
     # prepare output
-    out_fd = sys.stdout
+    out_fd = sys.__stdout__
     if args.output != '-':
         out_fd = open(args.output, 'wb')
 
