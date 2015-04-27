@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from siloscript.storage import Silo
 from siloscript.util import async
-from siloscript.error import NotFound, InvalidKey
+from siloscript.error import NotFound, InvalidKey, CryptError
 
 
 
@@ -399,40 +399,37 @@ class DataWebApp(object):
         self.machine = machine
 
 
+    @app.handle_errors(NotFound, KeyError)
+    def notfound(self, request, error):
+        request.setResponseCode(404)
+        return ''
+
+
+    @app.handle_errors(CryptError)
+    def crypt_error(self, request, error):
+        request.setResponseCode(500)
+        return 'Error, try again later.'
+
+
     @app.route('/<string:silo_key>/<string:key>', methods=['GET'])
-    @defer.inlineCallbacks
     def data_GET(self, request, silo_key, key):
         prompt = request.args.get('prompt', [None])[0]
         save = request.args.get('save', ['True'])[0] == 'True'
         options = request.args.get('options', None)
-        try:
-            value = yield self.machine.data_get(silo_key, key, prompt,
-                save=save, options=options)
-            defer.returnValue(value)
-        except KeyError:
-            request.setResponseCode(404)
+        return self.machine.data_get(silo_key, key, prompt,
+            save=save, options=options)
 
 
     @app.route('/<string:silo_key>/<string:key>', methods=['PUT'])
-    @defer.inlineCallbacks
     def data_PUT(self, request, silo_key, key):
         value = request.content.read()
-        try:
-            value = yield self.machine.data_put(silo_key, key, value)
-            defer.returnValue(value)
-        except (KeyError, NotFound):
-            request.setResponseCode(404)
+        return self.machine.data_put(silo_key, key, value)
 
 
     @app.route('/<string:silo_key>', methods=['POST'])
-    @defer.inlineCallbacks
     def data_getID(self, request, silo_key):
         value = request.args.get('value', [''])[0]
-        try:
-            value = yield self.machine.data_createToken(silo_key, value)
-            defer.returnValue(value)
-        except (KeyError, NotFound):
-            request.setResponseCode(404)
+        return self.machine.data_createToken(silo_key, value)
 
 
 

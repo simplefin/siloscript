@@ -4,3 +4,4 @@
 class Error(Exception): pass
 class NotFound(Error): pass
 class InvalidKey(Error): pass
+class CryptError(Error): pass

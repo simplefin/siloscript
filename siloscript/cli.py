@@ -29,15 +29,17 @@ def getStore(args):
     if args.sqlite:
         # sqlite
         store = SQLiteStore.create(args.sqlite)
+        log.msg('sqlite: %r' % (args.sqlite,), system='storage')
     else:
         # in-memory
         store = MemoryStore()
+        log.msg('memory', system='storage')
 
     # layer on the encryption
     gpg = gnupg.GPG(
         homedir=args.gpg_home,
         binary=which('gpg')[0])
-    return gnupgWrapper(gpg, store)
+    return gnupgWrapper(gpg, store, passphrase=args.gpg_passphrase)
 
 
 
@@ -50,6 +52,10 @@ parser.add_argument('--sqlite',
 parser.add_argument('--gpg-home', '-G',
     default='.gpghome',
     help='The directory where gpg keys live')
+parser.add_argument('--prompt-passphrase', '-P',
+    action='store_true',
+    help='Prompt for the passphrase before running.')
+parser.set_defaults(gpg_passphrase=None)
 
 
 subparsers = parser.add_subparsers(help='sub-command help')
@@ -192,4 +198,7 @@ run_parser.set_defaults(func=run)
 
 def run():
     args = parser.parse_args()
+    if args.prompt_passphrase:
+        args.gpg_passphrase = getpass.getpass(
+            'GPG passphrase (typing will be hidden): ')
     task.react(args.func, [args])
