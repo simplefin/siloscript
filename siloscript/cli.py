@@ -5,6 +5,7 @@ import sys
 import os
 import getpass
 import gnupg
+import json
 
 from twisted.python.filepath import FilePath
 from twisted.internet import endpoints, task, defer
@@ -140,16 +141,26 @@ def run(reactor, args):
         machine.answer_question(question['id'], answer)
     machine.channel_connect(chan, receiver)
 
-    # run the script
-    script_name = FilePath(args.script).basename()
-    out, err, rc = yield machine.run(args.user, script_name,
-        args.args, os.environ.copy(), chan)
-
+    # prepare output
     out_fd = sys.stdout
     if args.output != '-':
         out_fd = open(args.output, 'wb')
-    out_fd.write(out)
-    sys.stderr.write(err)
+
+    def logger(msg):
+        if msg['type'] == 'output':
+            if msg['channel'] == 1:
+                out_fd.write(msg['data'])
+            else:
+                sys.stderr.write(msg['data'])
+        
+        if args.verbose:
+            sys.stderr.write(json.dumps(msg) + '\n')
+
+    # run the script
+    script_name = FilePath(args.script).basename()
+    out, err, rc = yield machine.run(args.user, script_name,
+        args.args, os.environ.copy(), chan, logger=logger)
+    
     sys.exit(rc)
 
 
@@ -164,6 +175,9 @@ run_parser.add_argument('--user', '-u',
     type=str,
     default='defaultuser',
     help="The user whose data should be used.")
+run_parser.add_argument('--verbose', '-v',
+    action='store_true',
+    help="Verbose output?")
 run_parser.add_argument('script',
     help='Script to run')
 run_parser.add_argument('args',

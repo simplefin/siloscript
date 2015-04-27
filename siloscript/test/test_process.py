@@ -31,7 +31,8 @@ class SiloWrapperTest(TestCase):
             silo_key='THE-KEY',
             executable='foo.sh',
             args=['arg1'],
-            env={'FOO': 'hey'})
+            env={'FOO': 'hey'},
+            logger=None)
         self.assertEqual(out, 'http://www.example.com/foo/THE-KEY\nhey\n',
             "Should use the generated DATASTORE_URL")
         self.assertEqual(err, '')
@@ -80,3 +81,28 @@ class LocalScriptRunnerTest(TestCase):
         out, err, rc = yield runner.run('foo.sh')
         self.assertEqual(out, root.path + '\n', "Should set the path to the "
             "directory of the script")
+
+
+    @defer.inlineCallbacks
+    def test_logger(self):
+        """
+        You can get stdout, stderr as you go.
+        """
+        root = FilePath(self.mktemp())
+        root.makedirs()
+        foo = root.child('foo.sh')
+        foo.setContent('#!/bin/bash\necho hello\necho stderr? 1>&2\necho $1')
+        called = []
+        def log(x):
+            called.append(x)
+        runner = LocalScriptRunner(root.path)
+        out, err, rc = yield runner.run('foo.sh', logger=log)
+        stdout = ''.join(
+            [x['data'] for x in called if (
+                x['type'] == 'output' and x['channel'] == 1)])
+        self.assertEqual(stdout, 'hello\n\n')
+        self.assertIn({'type': 'output', 'channel': 2, 'data': 'stderr?\n'},
+            called)
+        self.assertEqual(err, 'stderr?\n')
+        self.assertEqual(out, 'hello\n\n')
+        self.assertIn({'type': 'exit', 'code': 0}, called)

@@ -188,7 +188,7 @@ class Machine(object):
         self.channel_close(channel_key)
 
 
-    def run(self, user, executable, args, env, channel_key=None):
+    def run(self, user, executable, args, env, channel_key=None, logger=None):
         """
         Create a data silo for the given user and script, then run the script.
 
@@ -200,6 +200,7 @@ class Machine(object):
         @param env: additional environment variable to set for script.
         @param channel_key: If user input is available, this is a channel_key
             as returned by L{channel_open}.  See also L{control_makeSilo}.
+        @param logger: Logging function to be given messages as it goes.
 
         @return: the (L{Deferred}) stdout, stderr, rc of the process or else
             a failure.
@@ -212,7 +213,8 @@ class Machine(object):
             silo_key=silo_key,
             executable=executable,
             args=args,
-            env=env)
+            env=env,
+            logger=logger)
         d.addBoth(cleanup)
         return d
 
