@@ -97,8 +97,10 @@ class LocalScriptRunnerTest(TestCase):
             called.append(x)
         runner = LocalScriptRunner(root.path)
         out, err, rc = yield runner.run('foo.sh', logger=log)
-        self.assertIn({'type': 'output', 'channel': 1, 'data': 'hello\n\n'},
-            called)
+        stdout = ''.join(
+            [x['data'] for x in called if (
+                x['type'] == 'output' and x['channel'] == 1)])
+        self.assertEqual(stdout, 'hello\n\n')
         self.assertIn({'type': 'output', 'channel': 2, 'data': 'stderr?\n'},
             called)
         self.assertEqual(err, 'stderr?\n')
