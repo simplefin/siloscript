@@ -145,7 +145,22 @@ def run(reactor, args):
     # open a channel
     chan = machine.channel_open()
     def receiver(question):
-        answer = getpass.getpass(question['prompt'] + ' ')
+        answer = ''
+        if question['options']:
+            prompt = '%s\n' % (question['prompt'],)
+            for i,option in enumerate(question['options']):
+                prompt += ' (%d) %s\n' % (i, option)
+            prompt += 'Enter the number of your choice: '
+            while not answer:
+                try:
+                    index = int(getpass.getpass(prompt).strip())
+                    answer = question['options'][index]
+                except ValueError:
+                    pass
+                except IndexError:
+                    pass
+        else:
+            answer = getpass.getpass(question['prompt'] + ' ')
         machine.answer_question(question['id'], answer)
     machine.channel_connect(chan, receiver)
 
