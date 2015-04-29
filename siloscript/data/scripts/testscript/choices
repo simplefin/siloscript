@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+# Copyright (c) The SimpleFIN Team
+# See LICENSE for details.
+
+import sys
+print sys.executable
+import os
+print os.environ.get('PATH')
+print '\n'.join(os.environ.keys())
+from siloscript import getValue
+
+value = getValue('foo', prompt='Foo?', save=False, options=[
+    'bob', 'sam', 'bill', 'john', 'sally',
+])
+print 'you chose: %r' % (value,)
