@@ -146,7 +146,7 @@ def run(reactor, args):
     chan = machine.channel_open()
     def receiver(question):
         answer = ''
-        if question['options']:
+        if question.get('options', []):
             prompt = '%s\n' % (question['prompt'],)
             for i,option in enumerate(question['options']):
                 prompt += ' (%d) %s\n' % (i, option)

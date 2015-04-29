@@ -4,6 +4,7 @@
 from twisted.internet import defer
 from klein import Klein
 from twisted.web.static import File
+from twisted.python import log
 
 import hashlib
 
@@ -401,6 +402,7 @@ class DataWebApp(object):
 
     @app.handle_errors(NotFound, KeyError)
     def notfound(self, request, error):
+        log.err(error)
         request.setResponseCode(404)
         return ''
 
