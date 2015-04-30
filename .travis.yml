@@ -7,12 +7,18 @@ addons:
     packages:
     - gnupg
 
-env:
-    - TOX_ENV=pyflakes
-    - TOX_ENV=license
-    - TOX_ENV=py26
-    - TOX_ENV=py27
 
+env:
+    global:
+        - RABBITMQ_URL="amqp://guest:guest@127.0.0.1:5672"
+    matrix:
+        - TOX_ENV=pyflakes
+        - TOX_ENV=license
+        - TOX_ENV=py26
+        - TOX_ENV=py27
+
+services:
+    - rabbitmq
 
 install:
     - pip install tox
