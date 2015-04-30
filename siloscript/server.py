@@ -402,7 +402,7 @@ class DataWebApp(object):
 
     @app.handle_errors(NotFound, KeyError)
     def notfound(self, request, error):
-        log.err(error)
+        log.msg(error)
         request.setResponseCode(404)
         return ''
 
