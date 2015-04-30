@@ -110,6 +110,7 @@ class SQLiteStoreTest(TestCase, StoreMixin):
 
 
 gpg_bin = which('gpg')[0]
+gpg_homedir = None
 
 
 
@@ -117,8 +118,10 @@ class gnupgWrapperTest(TestCase, StoreMixin):
 
 
     def getEmptyStore(self):
-        tmpdir = self.mktemp()
-        gpg = gnupg.GPG(homedir=tmpdir,
+        global gpg_homedir
+        if not gpg_homedir:
+            gpg_homedir = self.mktemp()
+        gpg = gnupg.GPG(homedir=gpg_homedir,
             binary=gpg_bin)
         return gnupgWrapper(gpg, MemoryStore())
 
@@ -127,8 +130,10 @@ class gnupgWrapperTest_with_passphrase(TestCase, StoreMixin):
 
 
     def getEmptyStore(self):
-        tmpdir = self.mktemp()
-        gpg = gnupg.GPG(homedir=tmpdir,
+        global gpg_homedir
+        if not gpg_homedir:
+            gpg_homedir = self.mktemp()
+        gpg = gnupg.GPG(homedir=gpg_homedir,
             binary=gpg_bin)
         return gnupgWrapper(gpg, MemoryStore(), passphrase='foo')
 
