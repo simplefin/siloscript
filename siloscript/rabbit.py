@@ -1,3 +1,5 @@
+# Copyright (c) The SimpleFIN Team
+# See LICENSE for details.
 
 from twisted.internet import defer, reactor, protocol, task
 

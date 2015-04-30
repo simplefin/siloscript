@@ -1,1 +1,4 @@
+# Copyright (c) The SimpleFIN Team
+# See LICENSE for details.
+
 docker-compose==1.2.0
