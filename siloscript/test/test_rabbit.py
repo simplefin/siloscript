@@ -137,3 +137,32 @@ class RabbitMachineTest(TestCase):
         self.assertEqual(question['prompt'], 'Something?')
 
 
+    @defer.inlineCallbacks
+    def test_run_return_result(self):
+        """
+        You can get the answer to the run, if you want.
+        """
+        runner = MagicMock()
+        runner.runWithSilo.return_value = defer.succeed('hi')
+        
+        store = MemoryStore()
+        machine = Machine(store=store, runner=runner)
+        server_conn = yield self.conn()
+        rab = RabbitMachine(machine, server_conn)
+        rab.start()
+        self.addCleanup(rab.stop)
+
+        client_conn = yield self.conn()
+        client = RabbitClient(client_conn)
+        self.addCleanup(client.stop)
+
+        result = yield client.run('jim', 'script', ['arg'],
+            {'FOO': 'BAR'}, return_result=True)
+
+        self.assertEqual(result['msg']['user'], 'jim')
+        self.assertEqual(result['msg']['executable'], 'script')
+        self.assertEqual(result['msg']['args'], ['arg'])
+        self.assertEqual(result['msg']['env'], {'FOO': 'BAR'})
+        self.assertEqual(result['result'], 'hi')
+
+
