@@ -27,7 +27,7 @@ class RabbitClientTest(TestCase):
 
 class RabbitMachineTest(TestCase):
 
-    timeout = 3
+    timeout = 2
     skip = skip_rabbit
 
     def setUp(self):
@@ -66,14 +66,14 @@ class RabbitMachineTest(TestCase):
         client_conn = yield self.conn()
         client = RabbitClient(client_conn)
 
-        result = defer.Deferred()
-        yield client.subscribeToResults(result.callback)
-        self.addCleanup(client.unsubscribe)
+        result_d = defer.Deferred()
+        yield client.subscribeToResults(result_d.callback)
+        self.addCleanup(client.stop)
 
         yield client.run('jim', 'script', ['arg'],
             {'FOO': 'BAR'})
 
-        result = yield result
+        result = yield result_d
 
         self.assertEqual(runner.runWithSilo.call_count, 1,
             "Should have called machine.runWithSilo")
@@ -88,4 +88,52 @@ class RabbitMachineTest(TestCase):
         self.assertEqual(result['msg']['args'], ['arg'])
         self.assertEqual(result['msg']['env'], {'FOO': 'BAR'})
         self.assertEqual(result['result'], 'hi')
+
+
+    @defer.inlineCallbacks
+    def test_runScript_channel(self):
+        """
+        You can run a script with an input channel.  Prompts will be sent
+        over Rabbit, but answers are sent to the machine (over HTTP in a
+        normal deployment)
+        """
+        runner = MagicMock()
+
+        @defer.inlineCallbacks
+        def runWithSilo(silo_key, *args, **kwargs):
+            answer = yield machine.data_get(silo_key, 'something',
+                prompt='Something?')
+            defer.returnValue('answer: %s' % (answer,))
+        runner.runWithSilo.side_effect = runWithSilo
+        
+        store = MemoryStore()
+        machine = Machine(store=store, runner=runner)
+        server_conn = yield self.conn()
+        rab = RabbitMachine(machine, server_conn)
+        rab.start()
+        self.addCleanup(rab.stop)
+
+        client_conn = yield self.conn()
+        client = RabbitClient(client_conn)
+
+        result_d = defer.Deferred()
+        yield client.subscribeToResults(result_d.callback)
+        self.addCleanup(client.stop)
+
+        questions = []
+        def questionReceiver(question):
+            questions.append(question)
+            machine.answer_question(question['id'], 'the answer')
+
+        yield client.run('jim', 'script', ['arg'],
+            {'FOO': 'BAR'}, question_receiver=questionReceiver)
+
+        result = yield result_d
+        self.assertEqual(result['result'], 'answer: the answer')
+        
+        self.assertEqual(len(questions), 1, "Should have asked one question "
+            "over the channel")
+        question = questions[0]
+        self.assertEqual(question['prompt'], 'Something?')
+
 

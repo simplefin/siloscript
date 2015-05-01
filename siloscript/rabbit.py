@@ -3,6 +3,8 @@
 
 from twisted.internet import defer, reactor, protocol, task
 
+from functools import partial
+
 import msgpack
 import pika
 from pika.adapters import twisted_connection
@@ -93,20 +95,28 @@ class RabbitMachine(object):
 
         if body:
             message = msgpack.unpackb(body)
-            self.runFromMessage(message, ch, method)
+            self.runFromMessage(message, ch, method, properties)
         else:
             yield ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
     @defer.inlineCallbacks
-    def runFromMessage(self, message, ch, method):
+    def runFromMessage(self, message, ch, method, properties):
         try:
+            # open a channel, maybe
+            channel_key = None
+            if properties.reply_to:
+                channel_key = self.machine.channel_open()
+                receiver = partial(self.questionReceiver, ch, properties.reply_to)
+                self.machine.channel_connect(channel_key, receiver)
+
             # run the script
             output = yield self.machine.run(
                 message['user'],
                 message['executable'],
                 message['args'],
-                message['env'])
+                message['env'],
+                channel_key=channel_key)
 
             # send the result
             result = {
@@ -127,7 +137,15 @@ class RabbitMachine(object):
         finally:
             yield ch.basic_ack(delivery_tag=method.delivery_tag)
 
-
+    @defer.inlineCallbacks
+    def questionReceiver(self, channel, queue, question):
+        """
+        Send a question through rabbit.
+        """
+        yield channel.basic_publish(
+            exchange='',
+            routing_key=queue,
+            body=msgpack.packb(question))
 
 
 
@@ -143,6 +161,7 @@ class RabbitClient(object):
         @param connection: As returned by L{makeConnection}
         """
         self.conn = connection
+        self._polls = []
 
 
     @defer.inlineCallbacks
@@ -163,30 +182,39 @@ class RabbitClient(object):
             exchange=RESULT_EXCHANGE,
             queue=queue.method.queue,
         )
-        queue_object, consumer_tag = yield channel.basic_consume(
-            queue=queue.method.queue,
-            no_ack=True)
-        self.lc = task.LoopingCall(self.poll_RESULT_QUEUE, queue_object,
-            receiver)
-        self.lc.start(self.POLL_INTERVAL)
+        self.poll_queue(channel, queue.method.queue, receiver, {'no_ack':True})
 
 
-    def unsubscribe(self):
-        if self.lc:
-            self.lc.stop()
+    def stop(self):
+        for lc in self._polls:
+            lc.stop()
 
 
     @defer.inlineCallbacks
-    def poll_RESULT_QUEUE(self, queue_object, receiver):
+    def poll_queue(self, channel, queue, receiver, consume_kwargs={}):
+        queue_object, consumer_tag = yield channel.basic_consume(
+            queue=queue,
+            **consume_kwargs)
+        lc = task.LoopingCall(self._poll_queue, queue_object,
+            receiver)
+        self._polls.append(lc)
+        lc.start(self.POLL_INTERVAL)
+
+
+    @defer.inlineCallbacks
+    def _poll_queue(self, queue_object, receiver):
         ch, method, properties, body = yield queue_object.get()
         message = msgpack.unpackb(body)
         receiver(message)
 
 
     @defer.inlineCallbacks
-    def run(self, user, executable, args, env):
+    def run(self, user, executable, args, env, question_receiver=None):
         """
         Start a run 
+
+        @param question_receiver: A function that will be called with questions
+            for a human if information isn't available in the db.
         """
         channel = yield self._getChannel()
         
@@ -197,11 +225,24 @@ class RabbitClient(object):
             'env': env,
         }
 
+        properties = pika.BasicProperties(
+            delivery_mode=PERSISTENT_DELIVERY,
+        )
+
+        if question_receiver:
+            # make a queue to receive prompts on
+            result = yield channel.queue_declare(exclusive=True)
+            callback_queue = result.method.queue
+            properties.reply_to = callback_queue
+            self.poll_queue(channel, callback_queue, question_receiver, {'no_ack':True})
+            # XXX there should be a way to stop this when there are no more
+            # prompts.  Otherwise, we'll have a bunch of question queues just
+            # sitting here.
+
+
         yield channel.basic_publish(
             exchange='',
             routing_key=RUN_QUEUE,
             body=msgpack.packb(message),
-            properties=pika.BasicProperties(
-                delivery_mode=PERSISTENT_DELIVERY,
-            ))
+            properties=properties)
 
