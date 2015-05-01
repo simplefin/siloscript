@@ -17,7 +17,7 @@ class Functional_ClientTest(TestCase):
     timeout = 5
 
     @defer.inlineCallbacks
-    def startServer(self, answers=None, open_channel=True):
+    def startServer(self, answers=None):
         """
         Start a server.
         """
@@ -33,17 +33,16 @@ class Functional_ClientTest(TestCase):
         host = p.getHost()
         url = 'http://%s:%s' % (host.host, host.port)
 
-        channel_key = None
-        if open_channel:
-            # open a channel for user interaction
-            channel_key = machine.channel_open()
-            def receiver(question):
-                answer = answers.get(question['prompt'])
-                machine.answer_question(question['id'], answer)
-            machine.channel_connect(channel_key, receiver)
+        def receiver(question):
+            answer = answers.get(question['prompt'])
+            machine.answer_question(question['id'], answer)
+
+        receiver_func = None
+        if answers:
+            receiver_func = receiver
 
         # make a silo
-        silo_key = machine.control_makeSilo('foo', 'bar', channel_key)
+        silo_key = machine.control_makeSilo('foo', 'bar', receiver_func)
         url = '%s/%s' % (url, silo_key)
         log.msg('url: %r' % (url,))
         defer.returnValue(url)
@@ -93,7 +92,7 @@ class Functional_ClientTest(TestCase):
         It is an error to prompt for a value when there's no channel
         to ask questions of.
         """
-        url = yield self.startServer(open_channel=False)
+        url = yield self.startServer()
 
         client = Client(url)
         yield self.assertFailure(threads.deferToThread(client.getValue,
@@ -106,7 +105,7 @@ class Functional_ClientTest(TestCase):
         """
         You don't have to prompt.
         """
-        url = yield self.startServer(open_channel=False)
+        url = yield self.startServer()
 
         client = Client(url)
         yield self.assertFailure(threads.deferToThread(client.getValue,
@@ -156,7 +155,7 @@ class Functional_ClientTest(TestCase):
         """
         You can save values.
         """
-        url = yield self.startServer(open_channel=False)
+        url = yield self.startServer()
 
         client = Client(url)
         yield threads.deferToThread(client.putValue, 'foo', 'bar')
@@ -169,7 +168,7 @@ class Functional_ClientTest(TestCase):
         """
         It will fail if you try to putValue on a bad url.
         """
-        url = yield self.startServer(open_channel=False)
+        url = yield self.startServer()
 
         client = Client(url + 'fake')
         yield self.assertFailure(threads.deferToThread(
@@ -181,7 +180,7 @@ class Functional_ClientTest(TestCase):
         """
         You can get tokens for things.
         """
-        url = yield self.startServer(open_channel=False)
+        url = yield self.startServer()
 
         client = Client(url)
         token = yield threads.deferToThread(client.getToken, 'hey')
@@ -199,7 +198,7 @@ class Functional_ClientTest(TestCase):
         """
         It will fail if something is wrong with the request.
         """
-        url = yield self.startServer(open_channel=False)
+        url = yield self.startServer()
 
         client = Client(url + 'fake')
         yield self.assertFailure(threads.deferToThread(
