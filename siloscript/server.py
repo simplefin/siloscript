@@ -36,78 +36,16 @@ class Machine(object):
         self.store = store
         self.runner = runner
 
-        self.channels = set()
         self.receivers = defaultdict(list)
         self.silos = {}
-        self.silo_channel = {}
-        self.pending_questions_by_id = {}
-        self.pending_channelClosed_notifications = defaultdict(list)
-        self.pending_questions_by_channel = defaultdict(list)
+        self.pending_questions = defaultdict(list)
 
 
-    def channel_open(self):
-        """
-        Create a new channel on which to receive questions.
-        """
-        key = 'CH-%s' % (uuid4(),)
-        self.channels.add(key)
-        return key
-
-
-    def channel_connect(self, channel_key, receiver):
-        """
-        Register a function to be called for each question sent to a channel.
-
-        @param channel_key: A channel key as returned by L{channel_open}.
-        @param receiver: A function that will be called with a single argument:
-            a dictionary with an C{'id'} and C{'prompt'}.  The function should
-            call L{answer_question} to provide the answer.
-        """
-        if channel_key not in self.channels:
-            raise KeyError("No such channel")
-        self.receivers[channel_key].append(receiver)
-        for question in list(self.pending_questions_by_channel[channel_key]):
-            receiver(question['data'])
-
-
-    def channel_disconnect(self, channel_key, receiver):
-        """
-        Opposite of L{channel_connect}.
-        """
-        self.receivers[channel_key].remove(receiver)
-
-
-    def channel_notifyClosed(self, channel_key):
-        """
-        Return a Deferred which will fire when the given channel is closed.
-        If no such channel exists, the Deferred will fire immediately.
-
-        @param channel_key: A channel key as returned by L{channel_open}.
-        """
-        if channel_key not in self.channels:
-            return defer.succeed(None)
-        d = defer.Deferred()
-        self.pending_channelClosed_notifications[channel_key].append(d)
-        return d
-
-
-    def channel_close(self, channel_key):
-        """
-        Close a channel so that it won't receive any more questions.
-
-        @param channel_key: A channel key as returned by L{channel_open}.
-        """
-        if channel_key in self.channels:
-            self.channels.remove(channel_key)
-        for d in self.pending_channelClosed_notifications[channel_key]:
-            d.callback(channel_key)
-
-
-    def channel_prompt(self, channel_key, question):
+    def ask_question(self, receiver, question):
         """
         Ask a question of a channel.
 
-        @param channel_key: A channel key as returned by L{channel_open}.
+        @param receiver: The function that will actually A channel key as returned by L{channel_open}.
         @param question: A dict question with at least a C{'prompt'}
             string and possibly some C{'options'}.
 
@@ -115,25 +53,19 @@ class Machine(object):
             given.
         """
         question_id = 'Q-%s' % (uuid4(),)
-        
-        answer_d = defer.Deferred()
-        q = {
-            'channel_key': channel_key,
-            'd': answer_d,
-            'data': {
-                'id': question_id,
-                'prompt': question['prompt'],
-            },
-        }
-        if 'options' in question:
-            q['data']['options'] = question['options']
-        self.pending_questions_by_id[question_id] = q
-        self.pending_questions_by_channel[channel_key].append(q)
-
-        for receiver in self.receivers[channel_key]:
-            receiver(q['data'])
-
+        question['id'] = question_id
+        answer_d = self.wait_for_answer(question_id)
+        receiver(question)
         return answer_d
+
+
+    def wait_for_answer(self, question_id):
+        """
+        Wait for the answer to a question.
+        """
+        d = defer.Deferred()
+        self.pending_questions[question_id].append(d)
+        return d
 
 
     def answer_question(self, question_id, answer):
@@ -144,14 +76,11 @@ class Machine(object):
         @param question_id: Id of question that was sent to receiver.
         @param answer: string answer.
         """
-        question = self.pending_questions_by_id.pop(question_id)
-        self.pending_questions_by_channel[question['channel_key']]\
-            .remove(question)
-        question['d'].callback(answer)
+        for d in self.pending_questions.pop(question_id):
+            d.callback(answer)
 
 
-
-    def control_makeSilo(self, user, subkey, channel_key=None):
+    def control_makeSilo(self, user, subkey, channel_receiver=None):
         """
         Create a data silo scoped to the given C{user} and C{subkey}.
 
@@ -160,21 +89,18 @@ class Machine(object):
 
         @param user: string user identifier.
         @param subkey: string subkey identifier.  
-        @param channel_key: optional channel key (as returned by
-            L{channel_open}) if user input will be available when data is
-            requested and not available from the data store.
+        @param channel_receiver: optional function if user input will be
+            available when data is requested and not available from the data
+            store.  The function will be called with question dictionaries.
 
         @return: string silo key.
         """
         func = None
-        if channel_key:
-            if channel_key not in self.channels:
-                raise KeyError("No such channel: %r" % (channel_key,))
-            func = partial(self.channel_prompt, channel_key)
+        if channel_receiver:
+            func = partial(self.ask_question, channel_receiver)
         silo = Silo(self.store, user, subkey, func)
         key = 'SILO-%s' % (uuid4(),)
         self.silos[key] = silo
-        self.silo_channel[key] = channel_key
         return key
 
 
@@ -185,11 +111,9 @@ class Machine(object):
         @param silo_key: A string silo key as returned by L{control_makeSilo}.
         """
         self.silos.pop(silo_key)
-        channel_key = self.silo_channel.pop(silo_key)
-        self.channel_close(channel_key)
 
 
-    def run(self, user, executable, args, env, channel_key=None, logger=None):
+    def run(self, user, executable, args, env, channel_receiver=None, logger=None):
         """
         Create a data silo for the given user and script, then run the script.
 
@@ -199,14 +123,14 @@ class Machine(object):
         @param executable: script name to run
         @param args: additional command-line args for execution.
         @param env: additional environment variable to set for script.
-        @param channel_key: If user input is available, this is a channel_key
-            as returned by L{channel_open}.  See also L{control_makeSilo}.
+        @param channel_receiver: If user input is available, this is a function
+            that will be called with questions.  See also L{control_makeSilo}.
         @param logger: Logging function to be given messages as it goes.
 
         @return: the (L{Deferred}) stdout, stderr, rc of the process or else
             a failure.
         """
-        silo_key = self.control_makeSilo(user, executable, channel_key)
+        silo_key = self.control_makeSilo(user, executable, channel_receiver)
         def cleanup(result):
             self.control_closeSilo(silo_key)
             return result
@@ -343,6 +267,8 @@ class ControlWebApp(object):
     def __init__(self, machine, static_root):
         self.machine = machine
         self.static_root = static_root
+        self.channels = defaultdict(list)
+        self.pending_questions = defaultdict(list)
 
 
     @app.route('/static', methods=['GET'], branch=True)
@@ -355,7 +281,7 @@ class ControlWebApp(object):
         """
         Create a new channel for a user to receive questions.
         """
-        return self.machine.channel_open()
+        return str(uuid4())
 
 
     @app.route('/channel/<string:channel_key>/events', methods=['GET'])
@@ -369,10 +295,19 @@ class ControlWebApp(object):
                 'prompt': data['prompt'],
             }))
 
-        self.machine.channel_connect(channel_key, partial(receiver, request))
+        func = partial(receiver, request)
+        self.channels[channel_key].append(func)
         
-        # XXX need to add disconnect checking
-        # request.notifyFinish().addCallback(rm, channel_key)
+        def rm(_, func):
+            # when the request has left, don't attempt to receive anymore.
+            self.channels[channel_key].remove(func)
+
+        request.notifyFinish().addCallback(rm, func)
+
+        # ask pending questions
+        for question in self.pending_questions[channel_key]:
+            func(question)
+
         return defer.Deferred()
 
     @app.route('/run/<string:user>', methods=['POST'])
@@ -384,11 +319,27 @@ class ControlWebApp(object):
         channel_key = request.args.get('channel_key', [None])[0]
         args = json.loads(request.args.get('args', ["[]"])[0])
 
-        d = self.machine.run(user, script, args, {}, channel_key)
+        func = partial(self.ask_channel, channel_key)
+        d = self.machine.run(user, script, args, {}, channel_receiver=func)
         # just return output
         # XXX change this later to look at exit code
         d.addCallback(lambda x: x[0])
         return d
+
+
+    def ask_channel(self, channel_key, question):
+        """
+        Ask a channel 
+        """
+        self.pending_questions[channel_key].append(question)
+        
+        def rmQuestion(answer, question):
+            self.pending_questions[channel_key].remove(question)
+        answer_d = self.machine.wait_for_answer(question['id'])
+        answer_d.addCallback(rmQuestion, question)
+
+        for receiver in self.channels[channel_key]:
+            receiver(question)
 
 
 
