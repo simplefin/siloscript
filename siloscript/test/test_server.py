@@ -26,23 +26,14 @@ class MachineTest(TestCase):
             store=store,
             runner='not real')
 
-        # create a channel
-        channel_key = yield machine.channel_open()
-        self.assertIsInstance(channel_key, str)
-
         # connect to a channel
         received = []
         def receiver(x):
             received.append(x)
-        machine.channel_connect(channel_key, receiver)
-
-        # wait for channel close
-        ch_close = machine.channel_notifyClosed(channel_key)
-        self.assertEqual(ch_close.called, False, "Should not be done yet")
 
         # create a user-scoped data silo tied to the channel
         silo_key = yield machine.control_makeSilo('jim', 'something',
-            channel_key)
+            channel_receiver=receiver)
         self.assertIsInstance(silo_key, str)
 
         # ask for data
@@ -76,9 +67,6 @@ class MachineTest(TestCase):
         # close the silo, which will close the channel
         yield machine.control_closeSilo(silo_key)
 
-        self.assertEqual(self.successResultOf(ch_close), channel_key,
-            "The channel should have been closed")
-
 
     def test_run_useScriptRunner(self):
         """
@@ -97,12 +85,12 @@ class MachineTest(TestCase):
             store=store,
             runner=runner)
 
-        ch = machine.channel_open()
+        receiver = lambda x: 'foo'
 
         # start execution
         out_d = machine.run('jim', 'foo.sh', args=['hey'],
             env={'HEY': 'GUYS'},
-            channel_key=ch)
+            channel_receiver=receiver)
         self.assertEqual(out_d.called, False, "Should not have finished yet")
 
         # while it's still running
@@ -116,8 +104,8 @@ class MachineTest(TestCase):
         self.assertEqual(kwargs['env'], {'HEY': 'GUYS'})
         self.assertIn(kwargs['silo_key'], machine.silos,
             "Should have made a real silo")
-        self.assertEqual(machine.silo_channel[kwargs['silo_key']], ch,
-            "Silo should be associated with the right channel")
+        # self.assertEqual(machine.silo_channel[kwargs['silo_key']], ch,
+        #     "Silo should be associated with the right channel")
 
         # finish execution
         result.callback('output')
@@ -149,66 +137,6 @@ class MachineTest(TestCase):
         self.assertEqual(out, 'hi')
 
 
-    def test_channel_disconnect(self):
-        """
-        You can disconnect from a channel
-        """
-        machine = Machine(store=MemoryStore(), runner=MagicMock())
-        chan = machine.channel_open()
-        receiver = MagicMock()
-        machine.channel_connect(chan, receiver)
-        machine.channel_disconnect(chan, receiver)
-        machine.channel_prompt(chan, {'prompt': 'foo?'})
-        self.assertEqual(receiver.call_count, 0, "Should not call disconnected"
-            " receiver")
-
-
-    def test_channel_closed(self):
-        """
-        You can't connect to a closed channel.  A notifyClosed on a closed
-        channel will fire immediately.
-        """
-        machine = Machine(store=MemoryStore(), runner=MagicMock())
-        chan = machine.channel_open()
-        machine.channel_close(chan)
-        self.assertRaises(KeyError, machine.channel_connect, chan, MagicMock())
-        result = machine.channel_notifyClosed(chan)
-        self.assertEqual(self.successResultOf(result), None)
-
-
-    def test_channel_connect_withPendingQuestions(self):
-        """
-        Deliver all pending question to channels when they connect.
-        """
-        machine = Machine(store=MemoryStore(), runner=MagicMock())
-        chan = machine.channel_open()
-        machine.channel_prompt(chan, {'prompt': 'name?'})
-        machine.channel_prompt(chan, {'prompt': 'age?'})
-
-        called = []
-        def receiver(question):
-            called.append(question['prompt'])
-            machine.answer_question(question['id'], 'foo')
-        machine.channel_connect(chan, receiver)
-        self.assertEqual(called, ['name?', 'age?'],
-            "Should have asked both questions")
-
-        called = []
-        def receiver2(question):
-            called.append(question)
-        machine.channel_connect(chan, receiver2)
-        self.assertEqual(called, [], "Answered questions should not be"
-            " asked again.")
-
-
-    def test_channel_connect_noSuchChannel(self):
-        """
-        You can't connect to a channel that doesn't exist.
-        """
-        machine = Machine(store=MemoryStore(), runner=MagicMock())
-        self.assertRaises(KeyError, machine.channel_connect, 'foo', MagicMock())
-
-
     @defer.inlineCallbacks
     def test_data_put_keyRestrictions(self):
         """
@@ -238,12 +166,11 @@ class MachineTest(TestCase):
         """
         store = MemoryStore()
         machine = Machine(store, None)
-        channel_key = machine.channel_open()
         def receiver(question):
             machine.answer_question(question['id'], 'answer')
-        machine.channel_connect(channel_key, receiver)
 
-        silo_key = machine.control_makeSilo('foo', 'bar', channel_key)
+        silo_key = machine.control_makeSilo('foo', 'bar',
+            channel_receiver=receiver)
         value = yield machine.data_get(silo_key,
             'name', prompt='Name?', save=False)
         self.assertEqual(value, 'answer')
@@ -259,13 +186,12 @@ class MachineTest(TestCase):
         """
         store = MemoryStore()
         machine = Machine(store, None)
-        channel_key = machine.channel_open()
         def receiver(question):
             self.assertEqual(question['options'], ['1','2','3'])
             machine.answer_question(question['id'], 'answer')
-        machine.channel_connect(channel_key, receiver)
 
-        silo_key = machine.control_makeSilo('foo', 'bar', channel_key)
+        silo_key = machine.control_makeSilo('foo', 'bar',
+            channel_receiver=receiver)
         value = yield machine.data_get(silo_key,
             'name', prompt='Name?', options=['1','2','3'])
         self.assertEqual(value, 'answer')
@@ -297,27 +223,6 @@ class MachineTest(TestCase):
         yield self.assertFailure(machine.data_put(silo_key, 'a', 'b'), NotFound)
         yield self.assertFailure(machine.data_createToken(silo_key, 'hey'),
             NotFound)
-
-
-    def test_closeSilo_channelClosed(self):
-        """
-        If the channel is already closed, closing the associated silo should
-        not be an error.
-        """
-        machine = Machine(store=MemoryStore(), runner=None)
-        channel_key = machine.channel_open()
-        silo_key = machine.control_makeSilo('foo', 'bar', channel_key)
-        machine.channel_close(channel_key)
-        machine.control_closeSilo(silo_key)
-
-
-    def test_makeSilo_nonExistingChannel(self):
-        """
-        It is an error to make a silo attached to a channel that doesn't exist.
-        """
-        machine = Machine(store=MemoryStore(), runner=None)
-        self.assertRaises(KeyError, machine.control_makeSilo, 'a', 'b',
-            'not real channel')
 
 
     @defer.inlineCallbacks
